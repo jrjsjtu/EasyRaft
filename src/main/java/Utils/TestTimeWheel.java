@@ -12,6 +12,6 @@ public class TestTimeWheel {
             public void run(Timeout timeout) throws Exception {
                 System.out.println("fuck");
             }
-        },3000, TimeUnit.MILLISECONDS);
+        },0, TimeUnit.MILLISECONDS);
     }
 }

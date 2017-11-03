@@ -4,6 +4,7 @@ import org.jgroups.JChannel;
 import org.jgroups.Message;
 import org.jgroups.ReceiverAdapter;
 import org.jgroups.View;
+import state.Candidate;
 import state.Follower;
 import state.State;
 
@@ -16,11 +17,14 @@ public class MainWorker extends ReceiverAdapter {
     JChannel channel;
 
     public MainWorker() throws Exception{
-        current = new Follower();
         channel = new JChannel();
+        State.setJChannel(channel);
         channel.setReceiver(this);
+        current = new Candidate();
         channel.connect("Cluster");
-        State.setjChannel(channel);
+
+        State.setMainWorker(this);
+        ((Candidate)current).joinGroup();
     }
 
     public void setState(State state){
@@ -35,5 +39,13 @@ public class MainWorker extends ReceiverAdapter {
     @Override
     public void receive(Message msg) {
         current.fireWhenMessageReceived(msg,this);
+    }
+
+    public static void main(String[] args){
+        try {
+            MainWorker mainWorker = new MainWorker();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

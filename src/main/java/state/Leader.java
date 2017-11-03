@@ -13,7 +13,7 @@ import java.util.WeakHashMap;
 
 public class Leader extends State {
     public Leader(){
-        curState = LEADER;
+        curState.set(LEADER);
         WeakHashMap hashMap = new WeakHashMap();
         hashMap.clear();
     }
@@ -22,7 +22,11 @@ public class Leader extends State {
 
     }
 
-    public void fireWhenMessageReceived(Message msg, MainWorker mainWorker) {
-
+    public void fireWhenRaftMessageReceived(RaftMessage raftMessage) {
+        try {
+            linkedBlockingQueue.put(raftMessage);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -18,11 +18,11 @@ public class MainWorker extends ReceiverAdapter {
 
     public MainWorker() throws Exception{
         channel = new JChannel();
-        State.setJChannel(channel);
         channel.setReceiver(this);
-        current = new Candidate();
         channel.connect("Cluster");
 
+        State.setJChannel(channel);
+        current = new Candidate();
         State.setMainWorker(this);
         ((Candidate)current).joinGroup();
     }
@@ -33,7 +33,7 @@ public class MainWorker extends ReceiverAdapter {
 
     @Override
     public void viewAccepted(View new_view) {
-        current.fireWhenViewAccepted(new_view,this);
+
     }
 
     @Override

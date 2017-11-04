@@ -6,6 +6,7 @@ import org.jgroups.Message;
 import org.jgroups.View;
 import worker.MainWorker;
 
+import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -16,9 +17,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 public abstract class State {
     protected static JChannel jChannel;
     protected static MainWorker mainWorker;
-    protected static int FOLLOWER = 0;
-    protected static int CANDIDATE = 1;
-    protected static int LEADER = 2;
     protected static final int clusterSize = 3;
 
     protected static String selfID;
@@ -26,7 +24,7 @@ public abstract class State {
     protected static HashedWheelTimer hashedWheelTimer = new HashedWheelTimer();
 
     protected static LinkedBlockingQueue linkedBlockingQueue = new LinkedBlockingQueue();
-    protected static AtomicInteger curState;
+
     public static void setJChannel(JChannel jChannel){
         State.selfID = jChannel.getAddress().toString();
         State.jChannel = jChannel;
@@ -40,7 +38,7 @@ public abstract class State {
 
     public void fireWhenMessageReceived(Message msg,MainWorker mainWorker){
         RaftMessage raftMessage = new RaftMessage(msg);
-        if (raftMessage.getSender() != selfID){
+        if (!raftMessage.getSender().equals(selfID)){
             fireWhenRaftMessageReceived(raftMessage);
         }
     }

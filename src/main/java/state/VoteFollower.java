@@ -10,55 +10,60 @@ import java.util.concurrent.TimeUnit;
  * Created by jrj on 17-11-2.
  */
 public class VoteFollower extends Follower {
-    String votedAddress;
-    voteFollowerTimerTask voteFollowerTimerTask;
-    boolean reveivedVote;
+    boolean receivedHeartbeat;
+    String leader;
+
     public VoteFollower(String leaderAddress) {
         super(leaderAddress);
-        this.votedAddress = leaderAddress;
-        curState.set(FOLLOWER);
-        voteFollowerTimerTask = new voteFollowerTimerTask();
+        timeoutForFollower = hashedWheelTimer.newTimeout(new LeaderFollowerTimerTask(),1000, TimeUnit.MILLISECONDS);
+        timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),5000, TimeUnit.MILLISECONDS);
+        receivedHeartbeat = false;
+        System.out.println("become voteFollower");
     }
-
-    public void fireAfterInitial() {
-        while (!linkedBlockingQueue.isEmpty()) {
-            try {
-                RaftMessage raftMessage = (RaftMessage) linkedBlockingQueue.take();
-                if (raftMessage.getTerm() > term && raftMessage.getMessageType() == RaftMessage.CandidateElection) {
-                    term = raftMessage.getTerm();
-                    this.leaderAddress = raftMessage.getSender();
-                } else if (raftMessage.getMessageType() == RaftMessage.LeaderHeartBeat) {
-                    mainWorker.setState(new LeaderFollower(raftMessage.getSender()));
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public void fireWhenRaftMessageReceived(RaftMessage raftMessage) {
-        reveivedVote = true;
-        if (raftMessage.getMessageType() == RaftMessage.CandidateElection){
-            if (raftMessage.getTerm()>term){
-                term = raftMessage.getTerm();
-                Message message = new Message(null,jChannel.getAddress(),"2;"+selfID+";"+raftMessage.getSender()+";"+ term);
-                try {
-                    jChannel.send(message);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private class voteFollowerTimerTask implements TimerTask {
+    /*
+    private class PeriodicTask implements TimerTask{
         public void run(Timeout timeout) throws Exception {
-            if (!reveivedVote){
+            if (!receivedHeartbeat){
                 mainWorker.setState(new Candidate());
+                timeoutForFollower.cancel();
             }else{
-                reveivedVote = false;
+                receivedHeartbeat = false;
+                timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),1000, TimeUnit.MILLISECONDS);
             }
-            hashedWheelTimer.newTimeout(voteFollowerTimerTask,5000,TimeUnit.MILLISECONDS);
+        }
+    }
+    */
+    public void fireWhenRaftMessageReceived(RaftMessage raftMessage) {
+        try {
+            linkedBlockingQueue.put(raftMessage);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private class LeaderFollowerTimerTask implements TimerTask {
+        public void run(Timeout timeout) throws Exception {
+            while (!linkedBlockingQueue.isEmpty()){
+                RaftMessage raftMessage;
+                raftMessage = (RaftMessage) linkedBlockingQueue.take();
+                switch (raftMessage.getMessageType()){
+                    case RaftMessage.LeaderHeartBeat:
+                        receivedHeartbeat = true;
+                        term = raftMessage.getTerm();
+                        leader = raftMessage.getSender();
+                        timeoutForPeriodic.cancel();
+                        mainWorker.setState(new LeaderFollower(leader));
+                        return;
+                    case RaftMessage.CandidateElection:
+                        if (raftMessage.getTerm()>term){
+                            receivedHeartbeat = true;
+                            term = raftMessage.getTerm();
+                            Message message = new Message(null,jChannel.getAddress(),RaftMessage.CandidateElection+";"+selfID+";"+raftMessage.getSender()+";"+ (term));
+                            jChannel.send(message);
+                        }
+                }
+            }
+            timeoutForFollower = hashedWheelTimer.newTimeout(new LeaderFollowerTimerTask(),1000, TimeUnit.MILLISECONDS);
         }
     }
 }

@@ -11,48 +11,42 @@ import java.util.concurrent.TimeUnit;
  * Created by jrj on 17-11-2.
  */
 public class LeaderFollower extends Follower {
-    String leaderAddress;
-    boolean receivedHeartbeat;
-    LeaderFollowerTimerTask leaderFollowerTimerTask;
+    Timeout timeoutForFollower,timeoutForPeriodic;
+    String leader;
+
     public LeaderFollower(String leaderAddress) {
         super(leaderAddress);
-        this.leaderAddress = leaderAddress;
-        leaderFollowerTimerTask = new LeaderFollowerTimerTask();
-    }
-
-    public void fireAfterInitial() {
-        while (!linkedBlockingQueue.isEmpty()) {
-            try {
-                RaftMessage raftMessage = (RaftMessage) linkedBlockingQueue.take();
-                if (raftMessage.getMessageType() == RaftMessage.LeaderHeartBeat && raftMessage.getTerm() > term) {
-                    this.leaderAddress = raftMessage.getSender();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+        timeoutForFollower = hashedWheelTimer.newTimeout(new LeaderFollowerTimerTask(),1000, TimeUnit.MILLISECONDS);
+        timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),5000, TimeUnit.MILLISECONDS);
         receivedHeartbeat = false;
-        hashedWheelTimer.newTimeout(leaderFollowerTimerTask,5000,TimeUnit.MILLISECONDS);
+        System.out.println("become leaderFollower");
     }
 
     public void fireWhenRaftMessageReceived(RaftMessage raftMessage) {
-        Message message = new Message(null,jChannel.getAddress(),"2;"+selfID+";"+raftMessage.getSender()+";"+ (++term));
         try {
-            jChannel.send(message);
-        } catch (Exception e) {
+            linkedBlockingQueue.put(raftMessage);
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
     private class LeaderFollowerTimerTask implements TimerTask {
         public void run(Timeout timeout) throws Exception {
-            if (!receivedHeartbeat){
-                mainWorker.setState(new Candidate());
-                return;
-            }else{
-                receivedHeartbeat = false;
+            while (!linkedBlockingQueue.isEmpty()){
+                RaftMessage raftMessage;
+                raftMessage = (RaftMessage) linkedBlockingQueue.take();
+                switch (raftMessage.getMessageType()){
+                    case RaftMessage.LeaderHeartBeat:
+                        receivedHeartbeat = true;
+                        if (raftMessage.getTerm()>term) {
+                            term = raftMessage.getTerm();
+                            leader = raftMessage.getSender();
+                        }
+                        return;
+                }
             }
-            hashedWheelTimer.newTimeout(leaderFollowerTimerTask,5000,TimeUnit.MILLISECONDS);
+            timeoutForFollower = hashedWheelTimer.newTimeout(new LeaderFollowerTimerTask(),1000, TimeUnit.MILLISECONDS);
         }
     }
 }
+

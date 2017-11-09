@@ -14,31 +14,58 @@ import java.util.Random;
 /**
  * Created by jrj on 17-10-30.
  */
-public abstract class Follower extends State {
+public class Follower extends State {
     protected String leaderAddress;
-    protected Timeout timeoutForFollower,timeoutForPeriodic;
+    protected Timeout timeoutForPeriodic;
     protected boolean receivedHeartbeat;
     public Follower(String leaderAddress){
         this.leaderAddress = leaderAddress;
-        //curState.set(FOLLOWER);
+        receivedHeartbeat = false;
+        timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),2000, TimeUnit.MILLISECONDS);
     }
 
     protected class PeriodicTask implements TimerTask{
         public void run(Timeout timeout) throws Exception {
             if (!receivedHeartbeat){
-                mainWorker.setState(new Candidate());
-                timeoutForFollower.cancel();
+                synchronized (mainWorker){
+                    mainWorker.setState(new Candidate());
+                }
             }else{
                 receivedHeartbeat = false;
-                timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),5000, TimeUnit.MILLISECONDS);
+                timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),2000, TimeUnit.MILLISECONDS);
             }
         }
     }
-    public void joinGroup(){
 
+    @Override
+    public String AppendEntries(long term, String leaderId, int prevLogIndex, int prevLogTerm, byte[] entries, long leaderCommit) {
+        if (term > currentTerm){
+            currentTerm = term;
+            leaderAddress = leaderId;
+            receivedHeartbeat = true;
+            if (lastLog.getTerm() == prevLogTerm && lastLog.getTerm() == prevLogTerm){
+                return currentTerm + ";True";
+            }
+        }
+        if (term == currentTerm && leaderId.equals(leaderAddress)){
+            receivedHeartbeat = true;
+            if (lastLog.getTerm() == prevLogTerm && lastLog.getTerm() == prevLogTerm){
+                return currentTerm + ";True";
+            }
+        }
+        return currentTerm + ";False";
     }
 
-    public void fireWhenViewAccepted(View new_view, MainWorker mainWorker) {
-
+    @Override
+    public String RequestVote(long term, String candidateId, int lastLogIndex, int lastTerm) {
+        if (term<currentTerm){
+            return currentTerm + ";False";
+        }
+        if(isLastCandidate(candidateId) && isUpToDate(lastLogIndex,lastTerm)){
+            currentTerm = term;
+            votedFor = candidateId;
+            return currentTerm + ";True";
+        }
+        return currentTerm + ";False";
     }
 }

@@ -4,6 +4,10 @@ import Utils.Timeout;
 import Utils.TimerTask;
 import org.jgroups.Message;
 import org.jgroups.View;
+import org.jgroups.blocks.MethodCall;
+import org.jgroups.blocks.RequestOptions;
+import org.jgroups.blocks.ResponseMode;
+import org.jgroups.util.RspList;
 import worker.MainWorker;
 
 import java.util.HashMap;
@@ -19,46 +23,49 @@ public class Leader extends State {
     String leader;
 
     public Leader() {
-        timeoutForLeader = hashedWheelTimer.newTimeout(new LeaderTimerTask(),1000, TimeUnit.MILLISECONDS);
-        timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),1000, TimeUnit.MILLISECONDS);
+        //timeoutForLeader = hashedWheelTimer.newTimeout(new LeaderTimerTask(),1000, TimeUnit.MILLISECONDS);
         System.out.println("become Leader!!!Ha Ha Ha");
+        timeoutForPeriodic = hashedWheelTimer.newTimeout(new AppendTask(),0, TimeUnit.MILLISECONDS);
     }
 
-    public void fireWhenViewAccepted(View new_view, MainWorker mainWorker) {
-
-    }
-
-    public void fireWhenRaftMessageReceived(RaftMessage raftMessage) {
-        try {
-            linkedBlockingQueue.put(raftMessage);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+    @Override
+    public String AppendEntries(long term, String leaderId, int prevLogIndex, int prevLogTerm, byte[] entries, long leaderCommit) {
+        if (term > currentTerm){
+            currentTerm = term;
+            Follower follower = new Follower(leaderId);
+            mainWorker.setState(follower);
+            return follower.AppendEntries(term,leaderId,prevLogIndex,prevLogTerm,entries,leaderCommit);
         }
-    }
-    private class PeriodicTask implements TimerTask{
-        public void run(Timeout timeout) throws Exception {
-            Message message = new Message(null,jChannel.getAddress(),RaftMessage.LeaderHeartBeat+";"+selfID+";LeaderHeartBeat;"+ (++term));
-            jChannel.send(message);
-            timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),1000, TimeUnit.MILLISECONDS);
+        if (term == currentTerm && leaderId.equals(selfID)){
+            return currentTerm + ";True";
         }
+        return currentTerm + ";False";
     }
-    private class LeaderTimerTask implements TimerTask {
+
+    @Override
+    public String RequestVote(long term, String candidateId, int lastLogIndex, int lastLogTerm) {
+        if (term > currentTerm){
+            currentTerm = term;
+            Follower follower = new Follower(candidateId);
+            mainWorker.setState(follower);
+            return follower.RequestVote(term,candidateId,lastLogIndex,lastLogTerm);
+        }
+        return currentTerm + ";False";
+    }
+
+    private class AppendTask implements TimerTask{
         public void run(Timeout timeout) throws Exception {
-            while (!linkedBlockingQueue.isEmpty()){
-                RaftMessage raftMessage;
-                raftMessage = (RaftMessage) linkedBlockingQueue.take();
-                switch (raftMessage.getMessageType()){
-                    case RaftMessage.LeaderHeartBeat:
-                        if (raftMessage.getTerm()>=term) {
-                            term = raftMessage.getTerm();
-                            leader = raftMessage.getSender();
-                            mainWorker.setState(new LeaderFollower(leader));
-                            timeoutForPeriodic.cancel();
-                            return;
-                        }
+            MethodCall call=new MethodCall(getClass().getMethod("AppendEntries",
+                    long.class, String.class,int.class,int.class,byte[].class,long.class));
+            //这里用random超时就可以实现了
+            RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 1000);
+            call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex);
+            RspList rsp_list=mainWorker.GetRpcDispacher().callRemoteMethods(null, call, opts);
+            synchronized (mainWorker){
+                if (mainWorker.isLeader()){
+                    hashedWheelTimer.newTimeout(new AppendTask(),500, TimeUnit.MILLISECONDS);
                 }
             }
-            timeoutForLeader = hashedWheelTimer.newTimeout(new LeaderTimerTask(),1000, TimeUnit.MILLISECONDS);
         }
     }
 }

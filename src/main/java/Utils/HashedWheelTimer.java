@@ -24,7 +24,7 @@ public class HashedWheelTimer implements Timer {
             AtomicIntegerFieldUpdater.newUpdater(HashedWheelTimer.class, "workerState");
 
     public HashedWheelTimer(){
-        this(1000,TimeUnit.MILLISECONDS,512,-1);
+        this(100,TimeUnit.MILLISECONDS,512,-1);
     }
     public HashedWheelTimer(
             long tickDuration, TimeUnit unit, int ticksPerWheel,long maxPendingTimeouts) {
@@ -208,6 +208,7 @@ public class HashedWheelTimer implements Timer {
             try {
                 task.run(this);
             } catch (Throwable t) {
+                t.printStackTrace();
                 System.out.println("A error encountered during expire(){task.run()}");
             }
         }

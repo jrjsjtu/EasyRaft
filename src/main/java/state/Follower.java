@@ -18,7 +18,14 @@ public class Follower extends State {
     protected String leaderAddress;
     protected Timeout timeoutForPeriodic;
     protected boolean receivedHeartbeat;
+
+    public Follower(){
+        System.out.println("become follower");
+        receivedHeartbeat = false;
+        timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),2000, TimeUnit.MILLISECONDS);
+    }
     public Follower(String leaderAddress){
+        System.out.println("become follower");
         this.leaderAddress = leaderAddress;
         receivedHeartbeat = false;
         timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),2000, TimeUnit.MILLISECONDS);
@@ -26,44 +33,47 @@ public class Follower extends State {
 
     protected class PeriodicTask implements TimerTask{
         public void run(Timeout timeout) throws Exception {
-            if (!receivedHeartbeat){
-                synchronized (mainWorker){
+            synchronized (mainWorker) {
+                if (!receivedHeartbeat) {
+                    System.out.println("no heartBeat and become candidate");
                     mainWorker.setState(new Candidate());
+                } else {
+                    receivedHeartbeat = false;
+                    timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(), 2000, TimeUnit.MILLISECONDS);
                 }
-            }else{
-                receivedHeartbeat = false;
-                timeoutForPeriodic = hashedWheelTimer.newTimeout(new PeriodicTask(),2000, TimeUnit.MILLISECONDS);
             }
         }
     }
 
     @Override
-    public String AppendEntries(long term, String leaderId, int prevLogIndex, int prevLogTerm, byte[] entries, long leaderCommit) {
-        if (term > currentTerm){
+    public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
+        //point 1 in paper
+        if (term<currentTerm){
+            return currentTerm+";False";
+        }else{
+            receivedHeartbeat = true;
+        }
+        if (term > currentTerm) {
             currentTerm = term;
             leaderAddress = leaderId;
-            receivedHeartbeat = true;
-            if (lastLog.getTerm() == prevLogTerm && lastLog.getTerm() == prevLogTerm){
-                return currentTerm + ";True";
-            }
         }
-        if (term == currentTerm && leaderId.equals(leaderAddress)){
-            receivedHeartbeat = true;
-            if (lastLog.getTerm() == prevLogTerm && lastLog.getTerm() == prevLogTerm){
-                return currentTerm + ";True";
-            }
+        //point 2 in paper
+        if (!checkIfInLogs(prevLogIndex,prevLogTerm)){
+            return currentTerm+";False";
+        }else{
+            return currentTerm+";True";
         }
-        return currentTerm + ";False";
     }
 
     @Override
-    public String RequestVote(long term, String candidateId, int lastLogIndex, int lastTerm) {
+    public String RequestVote(long term, String candidateId, long lastLogIndex, long lastTerm) {
         if (term<currentTerm){
             return currentTerm + ";False";
         }
         if(isLastCandidate(candidateId) && isUpToDate(lastLogIndex,lastTerm)){
             currentTerm = term;
             votedFor = candidateId;
+            leaderAddress = candidateId;
             return currentTerm + ";True";
         }
         return currentTerm + ";False";

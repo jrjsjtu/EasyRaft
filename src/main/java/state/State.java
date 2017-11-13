@@ -6,8 +6,7 @@ import org.jgroups.Message;
 import org.jgroups.View;
 import worker.MainWorker;
 
-import java.util.ArrayList;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -22,10 +21,10 @@ public class State implements RaftRpc{
     protected static String selfID;
     protected static final int clusterSize = 3;
 
-    protected static long currentTerm = 0l;
+    protected static long currentTerm = -1l;
     protected static String votedFor;
 
-    protected static ArrayList<ArrayList<String>> logs = new ArrayList<ArrayList<String>>();
+    protected static HashMap<Long,ArrayList<String>> logs = new HashMap<Long, ArrayList<String>>();
     protected static RaftLog lastLog = new RaftLog(-1,-1,null);
     protected static long commitIndex;
 
@@ -39,17 +38,25 @@ public class State implements RaftRpc{
     public static boolean checkIfInLogs(long lastLogIndex,long lastLogTerm){
         // here only term's size is int is supported.
         if (lastLogIndex == -1 && lastLogTerm == -1){return true;}
-        if (logs.size() < lastLogTerm){
+        if (logs.get(lastLogTerm)==null){
             return false;
         }else{
-            ArrayList<String> logInOneTerm = logs.get((int)lastLogTerm-1);
-            if (logInOneTerm.size()<lastLogIndex) return false;
+            ArrayList<String> logInOneTerm = logs.get(lastLogTerm);
+            if (logInOneTerm.size()<=lastLogIndex) return false;
             else{
                 //point 3 in paper
-                while (lastLogTerm > logs.size()){
+                Iterator iter = logs.entrySet().iterator();
+                while (iter.hasNext()) {
+                    Map.Entry entry = (Map.Entry) iter.next();
+                    Long key = (Long)entry.getKey();
+                    if (key>lastLogTerm){
+                        iter.remove();
+                    }
+                }
+                while (lastLogTerm+1 < logs.size()){
                     logs.remove(logs.get(logs.size()-1));
                 }
-                while (lastLogIndex > logInOneTerm.size()){
+                while (lastLogIndex+1 < logInOneTerm.size()){
                     logInOneTerm.remove(logInOneTerm.get(logInOneTerm.size()-1));
                 }
                 return true;

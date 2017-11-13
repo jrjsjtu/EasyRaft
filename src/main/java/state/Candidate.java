@@ -43,7 +43,6 @@ public class Candidate extends State {
     @Override
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastLogTerm) {
         //在candidate中,这里只能投自己,否则就要变成Follower
-        System.out.println("we receive a vote request " + candidateId);
         if (term<currentTerm){
             return currentTerm + ";False";
         }else if(term>currentTerm){

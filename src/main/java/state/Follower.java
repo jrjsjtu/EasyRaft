@@ -9,6 +9,8 @@ import worker.MainWorker;
 
 import Utils.Timeout;
 import Utils.TimerTask;
+
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.Random;
 /**
@@ -48,6 +50,7 @@ public class Follower extends State {
     @Override
     public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
         //point 1 in paper
+        System.out.println("AppendEntries " + term + " " + currentTerm);
         if (term<currentTerm){
             return currentTerm+";False";
         }else{
@@ -59,12 +62,24 @@ public class Follower extends State {
         }
         //point 2 in paper
         if (!checkIfInLogs(prevLogIndex,prevLogTerm)){
+            System.out.println("not in logs");
             return currentTerm+";False";
         }else{
+            System.out.println("in logs");
+            if (entries != null){
+                insertEntriesIntoLogs(entries);
+            }
             return currentTerm+";True";
         }
     }
 
+    public void insertEntriesIntoLogs(byte[] entries){
+        if(logs.get(currentTerm)== null){
+            logs.put(currentTerm,new ArrayList<String>());
+        }
+        System.out.println("new entry added " + new String(entries));
+        logs.get(currentTerm).add(new String(entries));
+    }
     @Override
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastTerm) {
         if (term<currentTerm){

@@ -2,6 +2,7 @@ package state;
 
 import Utils.Timeout;
 import Utils.TimerTask;
+import org.jgroups.Address;
 import org.jgroups.Message;
 import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
@@ -20,12 +21,17 @@ import java.util.concurrent.TimeUnit;
 
 public class Leader extends State {
     Timeout timeoutForPeriodic;
-    HashMap<String,MatchInfo> hashMap;
     LinkedBlockingQueue<UUID> followersNotConsistent;
     public Leader() {
         //timeoutForLeader = hashedWheelTimer.newTimeout(new LeaderTimerTask(),1000, TimeUnit.MILLISECONDS);
         System.out.println("become Leader!!!");
-        hashMap = new HashMap<String, MatchInfo>();
+        //For Test
+        logs.put(0l,new ArrayList<String>());
+        logs.get(0l).add("hahahaha");
+        RaftLog newRaftLog = new RaftLog(currentTerm,0,"hahahaha".getBytes());
+        newRaftLog.setPrevLog(lastLog);
+        lastLog = newRaftLog;
+        //For Test
         jChannel.getView();
         timeoutForPeriodic = hashedWheelTimer.newTimeout(new AppendTask(),0, TimeUnit.MILLISECONDS);
         followersNotConsistent = new LinkedBlockingQueue<UUID>();
@@ -79,6 +85,7 @@ public class Leader extends State {
             //这里用random超时就可以实现了
             RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 400);
             call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex);
+            System.out.println("For next heartBeat " + lastLog.getTerm() + " " + lastLog.getIndex());
             RspList rsp_list=mainWorker.GetRpcDispacher().callRemoteMethods(null, call, opts);
             Iterator iter = rsp_list.entrySet().iterator();
             while (iter.hasNext()){
@@ -104,35 +111,46 @@ public class Leader extends State {
     private class ConsistentLog implements Runnable{
         // if we keep consistency only through heartBeat then the speed may be very slow.
         UUID uuid;long lastLogIndex;long lastLogTerm;
+        RaftLog raftLogLocal;
         ConsistentLog(UUID uuid,long lastLogIndex,long lastLogTerm){
             this.lastLogIndex = lastLogIndex;
             this.lastLogTerm = lastLogTerm;
             this.uuid = uuid;
+            raftLogLocal = lastLog;
         }
 
         private void setIndexForNextRpc(){
-            // index and term begin from 1 not 0;
-            if (lastLogIndex>1){
-                lastLogTerm --;return;
-            }else if(lastLogIndex == 1){
-                lastLogTerm --;
-                if (lastLogTerm == 0){
-                    return;
-                }else{
-                    lastLogIndex = logs.get((int)lastLogTerm-1).size();
-                    return;
-                }
+            raftLogLocal = raftLogLocal.getPrev();
+            if (raftLogLocal != null){
+                lastLogIndex = raftLogLocal.getIndex();
+                lastLogTerm = raftLogLocal.getTerm();
+            }else{
+                lastLogIndex = -1l;
+                lastLogTerm = -1l;
             }
+            // index and term begin from 0;
         }
         public void run() {
             try {
                 MethodCall call = new MethodCall(MainWorker.class.getMethod("AppendEntries",
                         long.class, String.class, long.class, long.class, byte[].class, long.class));
                 RequestOptions opts = new RequestOptions(ResponseMode.GET_ALL, 1000);
+                Collection<Address> collection = new ArrayList();
+                collection.add(uuid);
                 while (true){
-                    setIndexForNextRpc();
-                    call.setArgs(currentTerm, selfID, lastLogIndex, lastLogTerm, null, commitIndex);
-                    RspList rsp_list = mainWorker.GetRpcDispacher().callRemoteMethods(null, call, opts);
+                    synchronized (mainWorker){
+                        if (!mainWorker.isLeader()){
+                            return;
+                        }
+                        setIndexForNextRpc();
+                    }
+                    System.out.println("For next heartBeat 2" + lastLogTerm + " " + lastLogIndex);
+                    if (lastLogIndex == -1){
+                        call.setArgs(currentTerm, selfID, -1, -1, "zero log".getBytes(), commitIndex);
+                    }else{
+                        call.setArgs(currentTerm, selfID, lastLogIndex, lastLogTerm, logs.get((int)lastLogTerm).get((int)lastLogIndex).getBytes(), commitIndex);
+                    }
+                    RspList rsp_list = mainWorker.GetRpcDispacher().callRemoteMethods(collection, call, opts);
                     if (rsp_list.getFirst()!=null){
                         String resultStr = (String)rsp_list.getFirst();
                         if (resultStr.split(";")[1].equals("True")) {

@@ -109,14 +109,29 @@ public class Leader extends State {
             this.lastLogTerm = lastLogTerm;
             this.uuid = uuid;
         }
+
+        private void setIndexForNextRpc(){
+            // index and term begin from 1 not 0;
+            if (lastLogIndex>1){
+                lastLogTerm --;return;
+            }else if(lastLogIndex == 1){
+                lastLogTerm --;
+                if (lastLogTerm == 0){
+                    return;
+                }else{
+                    lastLogIndex = logs.get((int)lastLogTerm-1).size();
+                    return;
+                }
+            }
+        }
         public void run() {
             try {
                 MethodCall call = new MethodCall(MainWorker.class.getMethod("AppendEntries",
                         long.class, String.class, long.class, long.class, byte[].class, long.class));
-                //这里用random超时就可以实现了
                 RequestOptions opts = new RequestOptions(ResponseMode.GET_ALL, 1000);
                 while (true){
-                    call.setArgs(currentTerm, selfID, --lastLogIndex, --lastLogTerm, null, commitIndex);
+                    setIndexForNextRpc();
+                    call.setArgs(currentTerm, selfID, lastLogIndex, lastLogTerm, null, commitIndex);
                     RspList rsp_list = mainWorker.GetRpcDispacher().callRemoteMethods(null, call, opts);
                     if (rsp_list.getFirst()!=null){
                         String resultStr = (String)rsp_list.getFirst();

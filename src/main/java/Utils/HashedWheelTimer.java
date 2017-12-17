@@ -456,7 +456,7 @@ public class HashedWheelTimer implements Timer {
 
             for (;;) {
                 final long currentTime = System.nanoTime() - startTime;
-                //1ms = 10^6 ns 就是这么任性
+                //1ms = 10^6 ns
                 //这里+999999,其实是为了上取整
                 //然后等到时间>=deadline了开始执行业务逻辑
                 long sleepTimeMs = (deadline - currentTime + 999999) / 1000000;
@@ -476,7 +476,7 @@ public class HashedWheelTimer implements Timer {
                 // See https://github.com/netty/netty/issues/356
 
                 try {
-                    //惊了,就是要看到这一句.真的用的sleep啊
+                    //很朴素用的就是sleep
                     Thread.sleep(sleepTimeMs);
                 } catch (InterruptedException ignored) {
                     if (WORKER_STATE_UPDATER.get(HashedWheelTimer.this) == WORKER_STATE_SHUTDOWN) {

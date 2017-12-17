@@ -1,13 +1,15 @@
 package state;
 
-import Utils.HashedWheelTimer;
+import EasyRaft.StateManager;
 import org.jgroups.JChannel;
 import org.jgroups.Message;
 import org.jgroups.View;
 import worker.MainWorker;
 
 import java.util.*;
+import java.util.concurrent.Delayed;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,24 +17,23 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Created by jrj on 17-10-30.
  */
-public class State implements RaftRpc{
-    protected static JChannel jChannel;
-    protected static MainWorker mainWorker;
-    protected static String selfID;
+public abstract class State implements RaftRpc{
     protected static final int clusterSize = 3;
+    protected static StateManager stateManager;
 
-    protected static long currentTerm = -1l;
-    protected static String votedFor;
+    public static String selfID;
 
-    protected static HashMap<Long,ArrayList<String>> logs = new HashMap<Long, ArrayList<String>>();
     protected static RaftLog lastLog = new RaftLog(-1,-1,null);
-    protected static long commitIndex;
 
-    protected static HashedWheelTimer hashedWheelTimer = new HashedWheelTimer();
+    protected static long commitIndex;
+    protected static long lastApplied;
+
+    protected static long currentTerm = 0;
+    protected static String votedFor;
+    protected static HashMap<Long,ArrayList<String>> logs = new HashMap<Long, ArrayList<String>>();
 
     public static void setJChannel(JChannel jChannel){
         State.selfID = jChannel.getAddress().toString();
-        State.jChannel = jChannel;
     }
 
     public static boolean checkIfInLogs(long lastLogIndex,long lastLogTerm){
@@ -63,14 +64,20 @@ public class State implements RaftRpc{
             }
         }
     }
-    public static void setMainWorker(MainWorker mainWorker){
-        State.mainWorker = mainWorker;
+    public static void setStateManager(StateManager stateManager){
+        State.stateManager = stateManager;
     }
 
     protected boolean isLastCandidate(String candidateId){
         return (votedFor == null) || votedFor.equals(candidateId);
     }
-
+    public void incremTermAndVotedFor(){
+        incremTerm();
+        votedFor = null;
+    }
+    public void incremTerm(){
+        currentTerm++;
+    }
     protected boolean isUpToDate(long lastLogIndex,long lastLogTerm){
         if (lastLog.getTerm()<lastLogTerm){
             return true;
@@ -78,14 +85,6 @@ public class State implements RaftRpc{
             return true;
         }
         return false;
-    }
-
-    public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
-        return null;
-    }
-
-    public String RequestVote(long term, String candidateId, long lastLogIndex, long lastLogTer) {
-        return null;
     }
 
 }

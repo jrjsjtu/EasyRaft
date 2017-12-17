@@ -1,5 +1,9 @@
 package state;
 
+import EasyRaft.AppendRpcResult;
+import EasyRaft.RaftDelayedTask;
+import EasyRaft.StateManager;
+import EasyRaft.VoteRpcResult;
 import Utils.Timeout;
 import Utils.TimerTask;
 import org.jgroups.Address;
@@ -10,45 +14,44 @@ import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.ResponseMode;
 import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
-import org.jgroups.util.UUID;
 import worker.MainWorker;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
 
 /**
  * Created by jrj on 17-10-30.
  */
 
 public class Candidate extends State {
-    Timeout timeoutForCandidate;
-
     public Candidate(){
         System.out.println("become candidate");
         votedFor = selfID;
-        //用最快的速度开始投票选举
-        hashedWheelTimer.newTimeout(new VoteTask(),0, TimeUnit.MILLISECONDS);
+        currentTerm++;
+        submitVoteTask();
     }
 
-    @Override
+    public void submitVoteTask(){
+        new VoteTask(this,System.currentTimeMillis()+500).run();
+    }
+
     public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
         currentTerm = term;
+        System.out.println("Candidate append entries "+term + "  " + currentTerm);
         Follower leaderFollower = new Follower(leaderId);
-        mainWorker.setState(leaderFollower);
+        stateManager.setState(leaderFollower);
         return leaderFollower.AppendEntries(term,leaderId,prevLogIndex,prevLogTerm,entries,leaderCommit);
     }
 
-    @Override
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastLogTerm) {
         //在candidate中,这里只能投自己,否则就要变成Follower
+        System.out.println("Candidate "+term + "  " + currentTerm);
         if (term<currentTerm){
             return currentTerm + ";False";
         }else if(term>currentTerm){
+            System.out.println("term > currentTerm");
             currentTerm = term;
             Follower leaderFollower = new Follower(candidateId);
-            mainWorker.setState(leaderFollower);
+            stateManager.setState(leaderFollower);
             return leaderFollower.RequestVote(term,candidateId,lastLogIndex,lastLogTerm);
         }else if(candidateId.equals(selfID)) {//这里隐含了term == currentTerm的意思
             return currentTerm + ";True;";
@@ -56,45 +59,83 @@ public class Candidate extends State {
         return currentTerm + ";False";
     }
 
-    private class VoteTask implements TimerTask{
-        public void run(Timeout timeout) throws Exception {
-            synchronized (mainWorker){
-                if (!mainWorker.isCandidate()){
-                    //虽然这里无法保证执行call的时候仍然是candidate,
-                    return;
-                }
-            }
-            MethodCall call=new MethodCall(MainWorker.class.getMethod("RequestVote",
-                    long.class, String.class,long.class,long.class));
-            //这里用random超时就可以实现了
-            RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 1000);
+    public void processVoteRpcResult(RspList rspList){
+        if (rspList==null){
             currentTerm ++;
-            call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm());
-            RspList rsp_list=mainWorker.GetRpcDispacher().callRemoteMethods(null, call, opts);
-            Iterator iter = rsp_list.entrySet().iterator();
-            int count = 0;
-            while (iter.hasNext()){
-                Map.Entry entry = (Map.Entry) iter.next();
-                //UUID uuid = (UUID)entry.getKey();
-                Rsp val = (Rsp)entry.getValue();
-                String response = (String)val.getValue();
-                if (response != null && response.split(";")[1].equals("True")){
-                    count +=1;
-                }
+            stateManager.submitDelayed(new VoteTask(this,System.currentTimeMillis()+getRandomTimeout()));
+            return;
+        }
+        System.out.println("VoteRpcResult result");
+        Iterator iter = rspList.entrySet().iterator();
+        int count = 0;
+        while (iter.hasNext()){
+            Map.Entry entry = (Map.Entry) iter.next();
+            //UUID uuid = (UUID)entry.getKey();
+            Rsp val = (Rsp)entry.getValue();
+            String response = (String)val.getValue();
+            /*
+            if(response != null && response.equals("self rpc")){
+                System.out.println(response);
+                continue;
             }
-            synchronized (mainWorker){
-                if (!mainWorker.isCandidate()){
-                    return;
+            */
+            if (response != null && response.split(";")[1].equals("True")){
+                System.out.println(response);
+                count +=1;
+            }
+        }
+        //System.out.println("count is "+  count + " rsplist size is "+rspList.size());
+        if (count>= clusterSize/2){
+            Leader leader = new Leader();
+            stateManager.setState(leader);
+        }else{
+            currentTerm ++;
+            //虽然可以通过rpc的超时时间来实现随机超时,但是由于jgroups的缘故,所有的rpc几乎是马上返回的.因此只能在IO上返回.
+            stateManager.submitDelayed(new VoteTask(this,System.currentTimeMillis()+getRandomTimeout()));
+        }
+    }
+
+
+    private int getRandomTimeout(){
+        Random random = new Random();
+        //random [120,150]
+        int s = random.nextInt(31) + 120;
+        return s;
+    }
+    public class VoteTask extends RaftDelayedTask{
+        public VoteTask(State state,long time){
+            super(state,time);
+        }
+        public void run(){
+            try{
+                MethodCall call=new MethodCall(StateManager.class.getMethod("RequestVote",
+                        long.class, String.class,long.class,long.class));
+                RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 4000);
+                call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm());
+                stateManager.submitIO(new VoteIOTask(opts,call));
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+        }
+
+        private class VoteIOTask implements Runnable{
+            RequestOptions opts;MethodCall call;
+            VoteIOTask(RequestOptions opts,MethodCall call){
+                this.opts = opts;this.call = call;
+            }
+            public void run() {
+                RspList rsp_list= null;
+                try {
+                    List arrayList = stateManager.getMemberList();
+                    if (arrayList.size() != 0){
+                        rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(arrayList, call, opts);
+                    }else{
+                        rsp_list = null;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-                if (count>= clusterSize/2+1 && mainWorker.isCandidate()){
-                    Leader leader = new Leader();
-                    mainWorker.setState(leader);
-                }else{
-                    Random random = new Random();
-                    //这里随机超时
-                    int randomTimeout = (random.nextInt(5)+3)*100;
-                    hashedWheelTimer.newTimeout(new VoteTask(),randomTimeout, TimeUnit.MILLISECONDS);
-                }
+                stateManager.submitRpcResult(new VoteRpcResult(state,rsp_list));
             }
         }
     }

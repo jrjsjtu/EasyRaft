@@ -95,6 +95,7 @@ public abstract class State implements RaftRpc{
             long raftTerm,raftIndex;
             raftTerm = Long.parseLong(raftInfo[0]);
             raftIndex = Long.parseLong(raftInfo[1]);
+            System.out.println("insert entry into log " + entry );
             RaftLog newLog = new RaftLog(raftTerm,raftIndex,raftInfo[2]);
             lastLog = newLog;
             logs.add(newLog);

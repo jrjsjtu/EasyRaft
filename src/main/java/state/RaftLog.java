@@ -19,10 +19,10 @@ public class RaftLog {
 
     public long getTerm(){return term;}
     public long getIndex(){return index;}
-    public byte[] getLog(){
-        return log.getBytes();
+    //public byte[] getLog(){return log.getBytes();}
+    public String getLog(){
+        return log;
     }
-
     public RaftLog getPrev() {
         return prev;
     }
@@ -39,9 +39,17 @@ public class RaftLog {
         this.next = next;
     }
 
-    public boolean moreUpToDate(long lastLogIndex,long lastLogTerm){
+    public boolean asOrMoreUpToDate(long lastLogIndex,long lastLogTerm){
         if (lastLogTerm == term){
             return index>=lastLogIndex;
+        }else{
+            return term>lastLogIndex;
+        }
+    }
+
+    public boolean moreUpToDate(long lastLogIndex,long lastLogTerm){
+        if (lastLogTerm == term){
+            return index>lastLogIndex;
         }else{
             return term>lastLogIndex;
         }

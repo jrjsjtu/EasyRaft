@@ -15,24 +15,25 @@ public class Follower extends State {
 
     public Follower(){
         System.out.println(System.currentTimeMillis() + "become follower");
+        votedFor = null;
         receivedHeartbeat = false;
         stateManager.submitDelayed(new CheckHeartBeatTask(this,System.currentTimeMillis()+1000));
     }
 
     public Follower(String leaderAddress){
-        System.out.println("become follower " + leaderAddress);
+        System.out.println(System.currentTimeMillis() + "become follower " + leaderAddress);
         this.leaderAddress = leaderAddress;
-        receivedHeartbeat = false;
         votedFor = null;
-        unISRLog = new RaftArray();
+        receivedHeartbeat = false;
         stateManager.submitDelayed(new CheckHeartBeatTask(this,System.currentTimeMillis()+1000));
     }
-    public RaftArray unISRLog;
+
     public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
         //如果接收到的 RPC 请求或响应中，任期号T > currentTerm，那么就令 currentTerm 等于 T，并切换状态为跟随者
         if (term > currentTerm) {
             currentTerm = term;
             leaderAddress = leaderId;
+            votedFor = null;
         }
         //重置receivedHeartbeat只适用于leader发来的心跳
         if(leaderId.equals(leaderAddress)){
@@ -63,11 +64,13 @@ public class Follower extends State {
 
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastTerm) {
         //System.out.println("Follower" + term + "  " + currentTerm);
+        //如果term < currentTerm返回 false
         if (term<currentTerm){
             return currentTerm + ";False";
         }
-        //if(isLastCandidate(candidateId) && isUpToDate(lastLogIndex,lastTerm)){
-        if(isLastCandidate(candidateId)){
+        //如果接收到的 RPC 请求或响应中，任期号T > currentTerm，那么就令 currentTerm 等于 T，并切换状态为跟随者
+        //如果 votedFor 为空或者就是 candidateId，并且候选人的日志至少和自己一样新，那么就投票给他
+        if((term>currentTerm || isLastCandidate(candidateId)) && !lastLog.moreUpToDate(lastLogIndex,lastTerm)){
             System.out.println("Follower voted for " + candidateId);
             currentTerm = term;
             votedFor = candidateId;
@@ -76,6 +79,7 @@ public class Follower extends State {
         }
         return currentTerm + ";False";
     }
+
 
     
     public class CheckHeartBeatTask extends RaftDelayedTask{
@@ -86,7 +90,7 @@ public class Follower extends State {
         public void run() {
             //在worker线程中
             //System.out.println(state);System.out.println(stateManager.getState());
-            System.out.println(System.currentTimeMillis() + "  check heart beat "  + receivedHeartbeat);
+            //System.out.println(System.currentTimeMillis() + "  check heart beat "  + receivedHeartbeat);
             if (receivedHeartbeat){
                 receivedHeartbeat = false;
                 stateManager.submitDelayed(new CheckHeartBeatTask(state,System.currentTimeMillis()+1000));

@@ -82,11 +82,14 @@ public class StateManager {
 
     //这里与论文中的实现有所不同,在返回值中加入了,调用rpc时的index值,方便程序的阅读性
     //但我没有在每个状态的appendEntries里加,而是在这边的返回值中统一加
-    public String AppendEntries(long term,String leaderId,long prevLogIndex,long prevLogTerm,byte[] entries,long leaderCommit){
+    public String AppendEntries(long term,String leaderId,long prevLogIndex,long prevLogTerm,byte[] entries,long leaderCommit,String target){
         if (leaderId.equals(State.selfID)) {
             return "self rpc";
         }
-
+        if (!target.equals("all") && !target.equals(State.selfID)){
+            System.out.println("rpc not target");
+            return "self rpc";
+        }
         AppendPara appendPara = new AppendPara(term,leaderId,prevLogIndex,prevLogTerm,entries,leaderCommit);
         try {
             synchronized (appendPara){
@@ -97,7 +100,6 @@ public class StateManager {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
         return appendPara.getResult()+";"+prevLogIndex;
     }
 
@@ -196,7 +198,6 @@ public class StateManager {
                             AppendPara appendPara = (AppendPara)rpcPara;
                             while(current==null){
                                 //有可能current还没有初始化,就收到rpc了,若出现这种情况就先自旋一会儿
-                                System.out.println("current is null!");
                             }
                             String result = current.AppendEntries(appendPara.getTerm(),appendPara.getLeaderId(),appendPara.getPrevLogIndex(),
                                     appendPara.getPrevLogTerm(),appendPara.getEntries(),appendPara.getLeaderCommit());
@@ -206,7 +207,6 @@ public class StateManager {
                             VotePara appendPara = (VotePara)rpcPara;
                             while(current==null){
                                 //有可能current还没有初始化,就收到rpc了,若出现这种情况就先自旋一会儿
-                                System.out.println("current is null!");
                             }
                             String result = current.RequestVote(appendPara.getTerm(),appendPara.getCandidateId(),appendPara.getLastLogIndex(), appendPara.getLastLogTerm());
                             appendPara.setResult(result);

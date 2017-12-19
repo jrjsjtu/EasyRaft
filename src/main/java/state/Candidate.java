@@ -51,7 +51,6 @@ public class Candidate extends State {
             return currentTerm + ";False";
         }else if(term>currentTerm){
             System.out.println("term > currentTerm");
-            currentTerm = term;
             Follower leaderFollower = new Follower(candidateId);
             stateManager.setState(leaderFollower);
             return leaderFollower.RequestVote(term,candidateId,lastLogIndex,lastLogTerm);
@@ -74,18 +73,13 @@ public class Candidate extends State {
             //UUID uuid = (UUID)entry.getKey();
             Rsp val = (Rsp)entry.getValue();
             String response = (String)val.getValue();
-            /*
-            if(response != null && response.equals("self rpc")){
-                System.out.println(response);
-                continue;
-            }
-            */
+            if(response != null && response.equals("self rpc")){continue;}
             if (response != null && response.split(";")[1].equals("True")){
                 System.out.println(response);
                 count +=1;
             }
         }
-        //System.out.println("count is "+  count + " rsplist size is "+rspList.size());
+        System.out.println("count is "+  count + " rsplist size is "+rspList.size());
         if (count>= clusterSize/2){
             Leader leader = new Leader();
             stateManager.setState(leader);

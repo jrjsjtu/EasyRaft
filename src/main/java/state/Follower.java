@@ -1,6 +1,7 @@
 package state;
 
 import EasyRaft.RaftDelayedTask;
+import Utils.RaftArray;
 import org.omg.Messaging.SYNC_WITH_TRANSPORT;
 
 import java.util.ArrayList;
@@ -17,42 +18,47 @@ public class Follower extends State {
         receivedHeartbeat = false;
         stateManager.submitDelayed(new CheckHeartBeatTask(this,System.currentTimeMillis()+1000));
     }
+
     public Follower(String leaderAddress){
         System.out.println("become follower " + leaderAddress);
         this.leaderAddress = leaderAddress;
         receivedHeartbeat = false;
         votedFor = null;
+        unISRLog = new RaftArray();
         stateManager.submitDelayed(new CheckHeartBeatTask(this,System.currentTimeMillis()+1000));
     }
-
+    public RaftArray unISRLog;
     public String AppendEntries(long term, String leaderId, long prevLogIndex, long prevLogTerm, byte[] entries, long leaderCommit) {
-        //System.out.println("AppendEntries " + term + " " + currentTerm);
-        //如果 term < currentTerm 就返回 false
-        //System.out.println("receive append rpc");
-        if(leaderId.equals(leaderAddress)){
-            receivedHeartbeat = true;
-        }else{
-            System.out.println("not equal " + leaderAddress + " " + leaderId);
-        }
-        if (term<currentTerm){
-            return currentTerm+";False";
-        }
-
+        //如果接收到的 RPC 请求或响应中，任期号T > currentTerm，那么就令 currentTerm 等于 T，并切换状态为跟随者
         if (term > currentTerm) {
             currentTerm = term;
             leaderAddress = leaderId;
         }
-        //point 2 in paper
-        if (!checkIfInLogs(prevLogIndex,prevLogTerm)){
-            //System.out.println("not in logs");
-            return currentTerm+";False";
-        }else{
-            System.out.println("in logs");
-            if (entries != null){
-                insertEntriesIntoLogs(entries);
-            }
-            return currentTerm+";True";
+        //重置receivedHeartbeat只适用于leader发来的心跳
+        if(leaderId.equals(leaderAddress)){
+            receivedHeartbeat = true;
         }
+
+        //if (entries != null){System.out.println("receive " + new String(entries));}
+        //1.如果 term < currentTerm 就返回 false （5.1 节）
+        if (term<currentTerm){
+            return currentTerm+";False";
+        }
+
+        //2.如果日志在 prevLogIndex 位置处的日志条目的任期号和 prevLogTerm 不匹配，则返回 false （5.3 节）
+        if (!checkIfInLogs(prevLogIndex,prevLogTerm)) {
+            //insertEntriesIntoLogs(entries);
+            //System.out.println("not in logs");
+            return currentTerm + ";False";
+        }
+
+        //3.如果日志在 prevLogIndex 位置处的日志条目的任期号和 prevLogTerm 不匹配，则返回 false （5.3 节）
+        removeExtraLog(prevLogIndex);
+        //4.附加任何在已有的日志中不存在的条目
+        if (entries != null){
+            insertEntriesIntoLogs(entries);
+        }
+        return currentTerm+";True";
     }
 
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastTerm) {
@@ -71,13 +77,6 @@ public class Follower extends State {
         return currentTerm + ";False";
     }
 
-    public void insertEntriesIntoLogs(byte[] entries){
-        if(logs.get(currentTerm)== null){
-            logs.put(currentTerm,new ArrayList<String>());
-        }
-        System.out.println("new entry added " + new String(entries));
-        logs.get(currentTerm).add(new String(entries));
-    }
     
     public class CheckHeartBeatTask extends RaftDelayedTask{
         CheckHeartBeatTask(State state,long time){

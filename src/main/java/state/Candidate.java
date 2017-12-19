@@ -7,6 +7,7 @@ import EasyRaft.VoteRpcResult;
 import Utils.Timeout;
 import Utils.TimerTask;
 import org.jgroups.Address;
+import org.jgroups.util.UUID;
 import org.jgroups.Message;
 import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
@@ -17,6 +18,7 @@ import org.jgroups.util.RspList;
 import worker.MainWorker;
 
 import java.util.*;
+
 
 /**
  * Created by jrj on 17-10-30.
@@ -65,7 +67,6 @@ public class Candidate extends State {
             stateManager.submitDelayed(new VoteTask(this,System.currentTimeMillis()+getRandomTimeout()));
             return;
         }
-        System.out.println("VoteRpcResult result");
         Iterator iter = rspList.entrySet().iterator();
         int count = 0;
         while (iter.hasNext()){
@@ -94,7 +95,6 @@ public class Candidate extends State {
             stateManager.submitDelayed(new VoteTask(this,System.currentTimeMillis()+getRandomTimeout()));
         }
     }
-
 
     private int getRandomTimeout(){
         Random random = new Random();

@@ -20,19 +20,19 @@ import java.util.concurrent.*;
  */
 
 public class Leader extends State {
-    LinkedBlockingQueue<UUID> followersNotConsistent;
-    HashMap<String,Long> matchIndex,nextIndex;
+    HashMap<Address,Long> matchIndex,nextIndex;
+
+    HashMap<Address,Long> notISRMap;
     public Leader() {
         System.out.println("become Leader!!!");
         //For Test
-        logs.put(0l,new ArrayList<String>());
-        logs.get(0l).add("hahahaha");
-        RaftLog newRaftLog = new RaftLog(currentTerm,0,"hahahaha".getBytes());
-        newRaftLog.setPrevLog(lastLog);
-        lastLog = newRaftLog;
-        followersNotConsistent = new LinkedBlockingQueue<UUID>();
-        matchIndex = new HashMap<String, Long>();
-        nextIndex = new HashMap<String, Long>();
+        stringBuilder = new StringBuilder();
+        stringBuilder.append("First log");
+
+        matchIndex = new HashMap<Address, Long>();
+        notISRMap = new HashMap<Address, Long>();
+        nextIndex = new HashMap<Address, Long>();
+
         submitAppendTask();
     }
 
@@ -41,6 +41,9 @@ public class Leader extends State {
     }
 
     public String AppendEntries(final long term,final String leaderId,final long prevLogIndex,final long prevLogTerm,final byte[] entries,final long leaderCommit) {
+        if (leaderId.equals(selfID)){
+            return "self rpc";
+        }
         if (term > currentTerm){
             currentTerm = term;
             Follower follower = new Follower(leaderId);
@@ -64,72 +67,38 @@ public class Leader extends State {
         return currentTerm + ";False";
     }
 
-    private class MatchInfo{
-        private long nextIndex;
-        private long matchIndex;
-        MatchInfo(long nextIndex,long matchIndex){
-            this.nextIndex = nextIndex;
-            this.matchIndex = matchIndex;
-        }
-
-        public long getNextIndex(){return nextIndex;}
-        public long getMatchIndex(){return matchIndex;}
-    }
-
-    /*
-    private class ProcessHeartBeatRpcResult implements Runnable{
-        private RspList rspList;
-        ProcessHeartBeatRpcResult(RspList rspList){
-            this.rspList = rspList;
-        }
-        public void run() {
-            try{
-                if (!stateManager.isLeader()){
-                    return;
-                }
-                Iterator iter = rspList.entrySet().iterator();
-                while (iter.hasNext()){
-                    Map.Entry entry = (Map.Entry) iter.next();
-                    Rsp val = (Rsp)entry.getValue();
-                    String response = (String)val.getValue();
-                    if (response != null && response.split(";")[1].equals("False")){
-                        UUID uuid = (UUID)entry.getKey();
-                        if (!followersNotConsistent.contains(uuid)){
-                            followersNotConsistent.put(uuid);
-                            new Thread(new ConsistentLog(uuid,lastLog.getIndex(),lastLog.getTerm())).start();
-                        }
-                    }
-                }
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-        }
-    }
-    */
+    String lastLogForRpc = null;
+    StringBuilder stringBuilder;
     public void processAppendRpcResult(RspList rspList){
         try{
-            stateManager.submitDelayed(new HeartBeatSendTask(this,System.currentTimeMillis()+100));
-            if (rspList==null){
-                return;
-            }
             Iterator iter = rspList.entrySet().iterator();
             while (iter.hasNext()){
+                System.out.println("process !");
                 Map.Entry entry = (Map.Entry) iter.next();
                 Rsp val = (Rsp)entry.getValue();
                 String response = (String)val.getValue();
-                System.out.println(response);
-                if (response != null && response.split(";")[1].equals("False")){
-                    UUID uuid = (UUID)entry.getKey();
-                    if (!followersNotConsistent.contains(uuid)){
-                        followersNotConsistent.put(uuid);
-                       // new Thread(new ConsistentLog(uuid,lastLog.getIndex(),lastLog.getTerm())).start();
-                    }
+                if (response == null || response.equals("self rpc")){
+                    continue;
+                }
+                UUID uuid = (UUID)entry.getKey();
+                String[] resultList = response.split(";");
+                //遇到term较大的就转为follower,用于脑裂时的恢复
+                if(Long.parseLong(resultList[0])>currentTerm){
+                    Follower follower = new Follower(uuid.toString());
+                    stateManager.setState(follower);
+                    return;
+                }
+                //这里与论文中的实现有所不同,在返回值中加入了,调用rpc时的index值,方便程序的阅读性
+                long remoteIndex = Long.parseLong(resultList[2]);
+                if (resultList[1].equals("False")){
+                    notISRMap.put(uuid,remoteIndex-1);
                 }else{
-                    UUID uuid = (UUID)entry.getKey();
-                    System.out.println(uuid.toString());
-                    System.out.println(selfID);
+                    if (remoteIndex==lastLog.getIndex() && notISRMap.containsKey(uuid)){
+                        notISRMap.remove(uuid);
+                    }
                 }
             }
+            stateManager.submitDelayed(new HeartBeatSendTask(this,System.currentTimeMillis()+100));
         }catch (Exception e){
             e.printStackTrace();
         }
@@ -145,92 +114,50 @@ public class Leader extends State {
                         long.class, String.class,long.class,long.class,byte[].class,long.class));
                 //这里用random超时就可以实现了
                 RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 5000);
-                call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex);
-                stateManager.submitIO(new HeartBeatIOTask(opts,call));
+
+                if (stringBuilder.length()==0){
+                    call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex);
+                }else{
+                    call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),stringBuilder.toString().getBytes(),commitIndex);
+                    insertEntriesIntoLogs(stringBuilder.toString().getBytes());
+                    stringBuilder = new StringBuilder();
+                }
+                stateManager.submitIO(new HeartBeatIOTask(opts,call,null));
+
+                Set<Map.Entry<Address, Long>> entryseSet=notISRMap.entrySet();
+                for (Map.Entry<Address, Long> entry:entryseSet) {
+                    MethodCall call1=new MethodCall(StateManager.class.getMethod("AppendEntries",
+                            long.class, String.class,long.class,long.class,byte[].class,long.class));
+
+                    RequestOptions opts1=new RequestOptions(ResponseMode.GET_ALL, 5000);
+                    //这个value存的是下一次prevlog的index,所以get的byte是不包括这一条的.
+                    RaftLog raftLog = state.getLog(entry.getValue());
+                    byte[] byteForFollower = State.getByteForFollower(raftLog.getIndex());
+                    call.setArgs(currentTerm,selfID,raftLog.getIndex(),raftLog.getTerm(),byteForFollower,commitIndex);
+                    ArrayList<Address> arrayList = new ArrayList();
+                    arrayList.add(entry.getKey());
+                    stateManager.submitIO(new HeartBeatIOTask(opts1,call1, arrayList));
+                }
             }catch (Exception e){
                 e.printStackTrace();
             }
         }
 
         private class HeartBeatIOTask implements Runnable{
-            RequestOptions opts;MethodCall call;
-            HeartBeatIOTask(RequestOptions opts,MethodCall call){
-                this.opts = opts;this.call = call;
+            RequestOptions opts;MethodCall call;ArrayList<Address> dests;
+            HeartBeatIOTask(RequestOptions opts,MethodCall call,ArrayList<Address> dests){
+                this.opts = opts;this.call = call;this.dests = dests;
             }
             public void run() {
                 RspList rsp_list= null;
                 try {
                     List arrayList = stateManager.getMemberList();
-                    if (arrayList.size()>=2){
-                        System.out.println("error size > 2");
-                    }
-                    if (arrayList.size() != 0){
-                        rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(arrayList, call, opts);
-                        System.out.println("result list size is " + rsp_list.size());
-                    }else{
-                        rsp_list = null;
-                    }
+                    rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(dests, call, opts);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
                 AppendRpcResult appendRpcResult = new AppendRpcResult(state,rsp_list);
                 stateManager.submitRpcResult(appendRpcResult);
-            }
-        }
-    }
-
-    private class ConsistentLog implements Runnable{
-        // if we keep consistency only through heartBeat then the speed may be very slow.
-        UUID uuid;long lastLogIndex;long lastLogTerm;
-        RaftLog raftLogLocal;
-        ConsistentLog(UUID uuid,long lastLogIndex,long lastLogTerm){
-            this.lastLogIndex = lastLogIndex;
-            this.lastLogTerm = lastLogTerm;
-            this.uuid = uuid;
-            raftLogLocal = lastLog;
-        }
-
-        private void setIndexForNextRpc(){
-            raftLogLocal = raftLogLocal.getPrev();
-            if (raftLogLocal != null){
-                lastLogIndex = raftLogLocal.getIndex();
-                lastLogTerm = raftLogLocal.getTerm();
-            }else{
-                lastLogIndex = -1l;
-                lastLogTerm = -1l;
-            }
-            // index and term begin from 0;
-        }
-        public void run() {
-            try {
-                MethodCall call = new MethodCall(StateManager.class.getMethod("AppendEntries",
-                        long.class, String.class, long.class, long.class, byte[].class, long.class));
-                RequestOptions opts = new RequestOptions(ResponseMode.GET_ALL, 1000);
-                Collection<Address> collection = new ArrayList();
-                collection.add(uuid);
-                while (true){
-                    synchronized (stateManager){
-                        if (!stateManager.isLeader()){
-                            return;
-                        }
-                        setIndexForNextRpc();
-                    }
-                    System.out.println("For next heartBeat 2" + lastLogTerm + " " + lastLogIndex);
-                    if (lastLogIndex == -1){
-                        call.setArgs(currentTerm, selfID, -1, -1, "zero log".getBytes(), commitIndex);
-                    }else{
-                        call.setArgs(currentTerm, selfID, lastLogIndex, lastLogTerm, logs.get((int)lastLogTerm).get((int)lastLogIndex).getBytes(), commitIndex);
-                    }
-                    RspList rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(collection, call, opts);
-                    if (rsp_list.getFirst()!=null){
-                        String resultStr = (String)rsp_list.getFirst();
-                        if (resultStr.split(";")[1].equals("True")) {
-                            break;
-                        }
-                    }
-                }
-            }catch (Exception e){
-                e.printStackTrace();
             }
         }
     }

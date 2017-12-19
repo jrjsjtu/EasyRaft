@@ -80,7 +80,8 @@ public class StateManager {
         this.current = tmpStat;
     }
 
-    AtomicInteger atomicInteger = new AtomicInteger(1);
+    //这里与论文中的实现有所不同,在返回值中加入了,调用rpc时的index值,方便程序的阅读性
+    //但我没有在每个状态的appendEntries里加,而是在这边的返回值中统一加
     public String AppendEntries(long term,String leaderId,long prevLogIndex,long prevLogTerm,byte[] entries,long leaderCommit){
         if (leaderId.equals(State.selfID)) {
             return "self rpc";
@@ -97,7 +98,7 @@ public class StateManager {
             e.printStackTrace();
         }
 
-        return appendPara.getResult();
+        return appendPara.getResult()+";"+prevLogIndex;
     }
 
     public String RequestVote(long term,String candidateId,long lastLogIndex,long lastLogTerm){

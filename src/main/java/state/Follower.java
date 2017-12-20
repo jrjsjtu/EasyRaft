@@ -59,6 +59,11 @@ public class Follower extends State {
         if (entries != null){
             insertEntriesIntoLogs(entries);
         }
+        commitIndex = leaderCommit;
+        for(long i=lastApplied+1;i<=commitIndex;i++){
+            System.out.println("execute " + i);
+        }
+        lastApplied = commitIndex;
         return currentTerm+";True;"+lastLog.getIndex();
     }
 

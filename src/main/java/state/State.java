@@ -27,7 +27,7 @@ public abstract class State implements RaftRpc{
     protected static RaftLog lastLog = new RaftLog(0,0,"zero log");
 
     protected static long commitIndex = 0;
-    protected static long lastApplied = 0;
+    protected static long lastApplied = -1;
 
     protected static long currentTerm = 0;
     protected static String votedFor;

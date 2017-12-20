@@ -99,6 +99,7 @@ public class Leader extends State {
             }else{
                 checkMatchIndexAndCommitForMinor(remoteIndex);
             }
+            commitIndex = lastApplied;
             stateManager.submitDelayed(new HeartBeatSendTask(this,System.currentTimeMillis()+100));
         }catch (Exception e){
             e.printStackTrace();
@@ -112,8 +113,22 @@ public class Leader extends State {
     }
 
     private void checkMatchIndexAndCommitForMinor(long remoteIndex){
-        if (lastApplied<=remoteIndex){
-
+        long tmpIndex = lastApplied;
+        while (tmpIndex<remoteIndex){
+            tmpIndex++;
+            Set<Map.Entry<Address,Long>> notISRSet = matchIndex.entrySet();
+            int count = 0;
+            for (Map.Entry<Address,Long> entry:notISRSet){
+                if (tmpIndex<entry.getValue()){
+                    count ++;
+                }
+            }
+            if (count>clusterSize/2){
+                System.out.println("now execute " + tmpIndex);
+                lastApplied = tmpIndex;
+            }else{
+                return;
+            }
         }
     }
 
@@ -125,6 +140,15 @@ public class Leader extends State {
             }else{
                 notISRMap.put(uuid,remoteIndex);
             }
+        }
+        if (matchIndex.containsKey(uuid)){
+            long tmp = matchIndex.get(uuid);
+            //防止有乱序的rpc结果才这么写
+            if (remoteIndex>tmp){
+                matchIndex.put(uuid,tmp);
+            }
+        }else{
+            matchIndex.put(uuid,remoteIndex);
         }
     }
 
@@ -165,7 +189,7 @@ public class Leader extends State {
                 if (stringBuilder.length()==0){
                     Random random = new Random();
                     if (random.nextInt(20)==0){
-                        System.out.println("add new Entry");
+                        //System.out.println("add new Entry");
                         stringBuilder.append(currentTerm + ","+(lastLog.getIndex()+1)+",Extra log");
                     }
                     call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex,"all");

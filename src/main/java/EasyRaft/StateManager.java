@@ -88,7 +88,7 @@ public class StateManager {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        return appendPara.getResult();
+        return appendPara.getResult()+";"+prevLogIndex;
     }
 
     public String RequestVote(long term,String candidateId,long lastLogIndex,long lastLogTerm){

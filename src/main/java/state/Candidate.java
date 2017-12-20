@@ -79,7 +79,7 @@ public class Candidate extends State {
                 count +=1;
             }
         }
-        System.out.println("count is "+  count + " rsplist size is "+rspList.size());
+        //System.out.println("count is "+  count + " rsplist size is "+rspList.size());
         if (count>= clusterSize/2){
             Leader leader = new Leader();
             stateManager.setState(leader);

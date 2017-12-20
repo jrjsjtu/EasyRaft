@@ -18,6 +18,6 @@ public class ClusterInfoReceiver extends ReceiverAdapter {
 
     @Override
     public void viewAccepted(View view) {
-        System.out.println("A client has changed！" + view.toString());
+        //System.out.println("A client has changed！" + view.toString());
     }
 }

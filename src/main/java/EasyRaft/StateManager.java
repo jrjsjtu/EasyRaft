@@ -49,25 +49,13 @@ public class StateManager {
         try{
             channel=new JChannel();
             disp=new RpcDispatcher(channel, this);
+            disp.setMembershipListener(new ClusterInfoReceiver());
             channel.connect("RpcDispatcherTestGroup");
-            getMemberList();
         }catch (Exception e){
             e.printStackTrace();
         }
     }
 
-    public List getMemberList(){
-        View view = channel.getView();
-        List<Address> addressList = Arrays.asList(view.getMembersRaw());
-        List<Address> newList = new ArrayList<Address>();
-        Address selfAddress = channel.getAddress();
-        for (Address address:addressList){
-            if (!address.equals(selfAddress)){
-                newList.add(address);
-            }
-        }
-        return newList;
-    }
     private void initState(){
         State.setJChannel(channel);
         State.setStateManager(this);
@@ -100,7 +88,7 @@ public class StateManager {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        return appendPara.getResult()+";"+prevLogIndex;
+        return appendPara.getResult();
     }
 
     public String RequestVote(long term,String candidateId,long lastLogIndex,long lastLogTerm){

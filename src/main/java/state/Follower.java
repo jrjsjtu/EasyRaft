@@ -43,23 +43,23 @@ public class Follower extends State {
         //if (entries != null){System.out.println("receive " + new String(entries));}
         //1.如果 term < currentTerm 就返回 false （5.1 节）
         if (term<currentTerm){
-            return currentTerm+";False";
+            return currentTerm+";False;"+lastLog.getIndex();
         }
 
         //2.如果日志在 prevLogIndex 位置处的日志条目的任期号和 prevLogTerm 不匹配，则返回 false （5.3 节）
         if (!checkIfInLogs(prevLogIndex,prevLogTerm)) {
             //insertEntriesIntoLogs(entries);
             //System.out.println("not in logs");
-            return currentTerm + ";False";
+            return currentTerm + ";False;"+lastLog.getIndex();
         }
 
-        //3.如果日志在 prevLogIndex 位置处的日志条目的任期号和 prevLogTerm 不匹配，则返回 false （5.3 节）
-        removeExtraLog(prevLogIndex);
+        //3.如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的 （5.3 节）
         //4.附加任何在已有的日志中不存在的条目
+        //3,4由insertEntriesIntoLogs完成
         if (entries != null){
             insertEntriesIntoLogs(entries);
         }
-        return currentTerm+";True";
+        return currentTerm+";True;"+lastLog.getIndex();
     }
 
     public String RequestVote(long term, String candidateId, long lastLogIndex, long lastTerm) {

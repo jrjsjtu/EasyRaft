@@ -120,12 +120,7 @@ public class Candidate extends State {
             public void run() {
                 RspList rsp_list= null;
                 try {
-                    List arrayList = stateManager.getMemberList();
-                    if (arrayList.size() != 0){
-                        rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(arrayList, call, opts);
-                    }else{
-                        rsp_list = null;
-                    }
+                    rsp_list = stateManager.getRpcDispatcher().callRemoteMethods(null, call, opts);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

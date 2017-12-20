@@ -20,22 +20,20 @@ import java.util.concurrent.*;
  */
 
 public class Leader extends State {
-    HashMap<Address,Long> matchIndex,nextIndex;
+    HashMap<Address,Long> matchIndex;
 
     HashMap<Address,Long> notISRMap;
     public Leader() {
         System.out.println("become Leader!!!");
         //For Test
         stringBuilder = new StringBuilder();
-        stringBuilder.append("1,1,First log");
 
         matchIndex = new HashMap<Address, Long>();
-        notISRMap = new HashMap<Address, Long>();
-        nextIndex = new HashMap<Address, Long>();
-        startTime = System.currentTimeMillis();
+        notISRMap = new HashMap<Address, Long>(); //就是论文里的nextIndex
+
         submitAppendTask();
     }
-    long startTime;
+
     public void submitAppendTask(){
         new HeartBeatSendTask(this,System.currentTimeMillis()).run();
     }
@@ -68,6 +66,8 @@ public class Leader extends State {
     public void processAppendRpcResult(RspList rspList){
         try{
             Iterator iter = rspList.entrySet().iterator();
+            int count  = 0;
+            long remoteIndex=0,lastRpcIndex=0;
             while (iter.hasNext()){
                 Map.Entry entry = (Map.Entry) iter.next();
                 Rsp val = (Rsp)entry.getValue();
@@ -83,14 +83,21 @@ public class Leader extends State {
                     stateManager.setState(follower);
                     return;
                 }
-                //这里与论文中的实现有所不同,在返回值中加入了,调用rpc时的index值,方便程序的阅读性
-                long remoteIndex = Long.parseLong(resultList[2]);
+                //这里与论文中的实现有所不同,在返回值中加入了,调用rpc后的lastLog的index,方便程序的实现
+                remoteIndex = Long.parseLong(resultList[2]);
+                lastRpcIndex = Long.parseLong(resultList[3]);
                 if (resultList[1].equals("False")){
                     //可能出现rpc的返回结果乱序的问题.
-                    updateNextIndexWhenFalse(uuid,remoteIndex);
+                    updateNextIndexWhenFalse(uuid,lastRpcIndex);
                 }else{
-                    updateNextIndexWhenTrue(uuid);
+                    updateNextIndexWhenTrue(uuid,remoteIndex);
+                    count ++;
                 }
+            }
+            if (count>=clusterSize/2){
+                checkMatchIndexAndCommitForMajority(remoteIndex);
+            }else{
+                checkMatchIndexAndCommitForMinor(remoteIndex);
             }
             stateManager.submitDelayed(new HeartBeatSendTask(this,System.currentTimeMillis()+100));
         }catch (Exception e){
@@ -98,20 +105,37 @@ public class Leader extends State {
         }
     }
 
-    private void updateNextIndexWhenTrue(UUID uuid){
-        if (notISRMap.containsKey(uuid)){
-            System.out.println("remove notISRMap " + uuid.toString());
-            notISRMap.remove(uuid);
+    private void checkMatchIndexAndCommitForMajority(long remoteIndex){
+        for(;lastApplied<=remoteIndex;lastApplied++){
+            System.out.println("now execute " + lastApplied);
         }
     }
 
-    private void updateNextIndexWhenFalse(UUID uuid,long remoteIndex){
-        long nextIndex = remoteIndex;
-        long lastTerm = logs.get((int)remoteIndex).getTerm();
+    private void checkMatchIndexAndCommitForMinor(long remoteIndex){
+        if (lastApplied<=remoteIndex){
+
+        }
+    }
+
+    private void updateNextIndexWhenTrue(UUID uuid,long remoteIndex){
+        if (notISRMap.containsKey(uuid)){
+            if (remoteIndex==lastLog.getIndex()){
+                System.out.println("remove notISRMap " + uuid.toString());
+                notISRMap.remove(uuid);
+            }else{
+                notISRMap.put(uuid,remoteIndex);
+            }
+        }
+    }
+
+    private void updateNextIndexWhenFalse(UUID uuid,long lastRpcIndex){
+        long nextIndex = lastRpcIndex;
+        long lastTerm = logs.get((int)nextIndex).getTerm();
         //可能出现rpc的返回结果乱序的问题.
         if (notISRMap.containsKey(uuid)){
             long tmp = notISRMap.get(uuid);
-            if (tmp<remoteIndex){
+            if (tmp<nextIndex){
+                //之前的一个rpc结果现在才返回,这个nextIndex就是调用rpc时传入的prevLogIndex参数
                 return;
             }
         }

@@ -26,8 +26,8 @@ public abstract class State implements RaftRpc{
 
     protected static RaftLog lastLog = new RaftLog(0,0,"zero log");
 
-    protected static long commitIndex;
-    protected static long lastApplied;
+    protected static long commitIndex = 0;
+    protected static long lastApplied = 0;
 
     protected static long currentTerm = 0;
     protected static String votedFor;
@@ -95,10 +95,26 @@ public abstract class State implements RaftRpc{
             long raftTerm,raftIndex;
             raftTerm = Long.parseLong(raftInfo[0]);
             raftIndex = Long.parseLong(raftInfo[1]);
-            System.out.println("insert entry into log " + entry );
+            long localTerm,localIndex;
+            localTerm = lastLog.getTerm();
+            localIndex = lastLog.getIndex();
             RaftLog newLog = new RaftLog(raftTerm,raftIndex,raftInfo[2]);
-            lastLog = newLog;
-            logs.add(newLog);
+            if (raftIndex==(localIndex+1)){
+                //正好是现在lastLog的后面一条,才可以插入
+                System.out.println("insert entry into log " + entry );
+                lastLog = newLog;
+                logs.add(newLog);
+            }else if(raftIndex<logs.size()){
+                //3.如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的 （5.3 节）
+                if (raftTerm!=localTerm){
+                    for (int i=logs.size()-1;i>=raftIndex;i--){
+                        logs.remove(i);
+                    }
+                    lastLog = newLog;
+                    logs.add(newLog);
+                }
+                //如果匹配就什么都不做了
+            }
         }
     }
 }

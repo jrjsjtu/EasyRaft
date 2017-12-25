@@ -107,8 +107,11 @@ public class Leader extends State {
     }
 
     private void checkMatchIndexAndCommitForMajority(long remoteIndex){
-        for(;lastApplied<=remoteIndex;lastApplied++){
-            System.out.println("now execute " + lastApplied);
+        for(long i = lastApplied+1;i<=remoteIndex;i++){
+            System.out.println("now execute " + i);
+        }
+        if (remoteIndex>lastApplied){
+            lastApplied = remoteIndex;
         }
     }
 

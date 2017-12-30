@@ -1,22 +1,18 @@
-package KVDatabase;
+package ServerIO.handler;
 
+import ServerIO.RaftKeeper;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
-import java.nio.ByteBuffer;
 
 /**
  * Created by jrj on 17-12-24.
  */
 public class RequestDecoder extends ChannelInboundHandlerAdapter {
     ByteBuf header,payLoad;
-    boolean readHeaderCompleted;
     int payLoadSize;
-    public RequestDecoder(){
-        readHeaderCompleted = false;
-    }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -30,7 +26,11 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
             if (header.writableBytes()==0){
                 payLoadSize = header.readInt();
                 if (payLoadSize<0){
-                    throw new Exception("invalid message size");
+                    ByteBuf byteBufError =  Unpooled.buffer();
+                    byteBufError.writeBytes("Error".getBytes());
+                    ctx.writeAndFlush(byteBufError);
+                    buf.release();
+                    return;
                 }else{
                     payLoad = Unpooled.buffer(payLoadSize);
                 }
@@ -39,10 +39,16 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
         if (payLoad != null && payLoad.writableBytes()>0){
             buf.readBytes(payLoad);
             if (payLoad.writableBytes() == 0){
-                ctx.fireChannelRead(payLoad);
+                RaftKeeper.processRequest(ctx,payLoad);
                 header.resetWriterIndex();
                 header.resetReaderIndex();
             }
         }
+        buf.release();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        String address = ctx.channel().remoteAddress().toString();
     }
 }

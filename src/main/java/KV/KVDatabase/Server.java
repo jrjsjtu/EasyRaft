@@ -1,4 +1,4 @@
-package KVDatabase;
+package KV.KVDatabase;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;

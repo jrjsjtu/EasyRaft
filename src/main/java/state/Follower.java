@@ -1,10 +1,6 @@
 package state;
 
 import EasyRaft.RaftDelayedTask;
-import Utils.RaftArray;
-import org.omg.Messaging.SYNC_WITH_TRANSPORT;
-
-import java.util.ArrayList;
 
 /**
  * Created by jrj on 17-10-30.
@@ -54,6 +50,9 @@ public class Follower extends State {
         }
 
         //3.如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的 （5.3 节）
+        for (int i=logs.size()-1;i>prevLogIndex;i--){
+            logs.remove(i);
+        }
         //4.附加任何在已有的日志中不存在的条目
         //3,4由insertEntriesIntoLogs完成
         if (entries != null){

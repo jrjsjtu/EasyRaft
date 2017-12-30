@@ -3,6 +3,7 @@ package state;
 import EasyRaft.AppendRpcResult;
 import EasyRaft.RaftDelayedTask;
 import EasyRaft.StateManager;
+import io.netty.channel.ChannelHandlerContext;
 import org.jgroups.Address;
 import org.jgroups.Message;
 import org.jgroups.View;
@@ -26,8 +27,8 @@ public class Leader extends State {
     public Leader() {
         System.out.println("become Leader!!!");
         //For Test
-        stringBuilder = new StringBuilder();
 
+        raftLogList = new LinkedList<RaftLog>();
         matchIndex = new HashMap<Address, Long>();
         notISRMap = new HashMap<Address, Long>(); //就是论文里的nextIndex
 
@@ -62,7 +63,6 @@ public class Leader extends State {
         return currentTerm + ";False";
     }
 
-    StringBuilder stringBuilder;
     public void processAppendRpcResult(RspList rspList){
         try{
             Iterator iter = rspList.entrySet().iterator();
@@ -108,7 +108,10 @@ public class Leader extends State {
 
     private void checkMatchIndexAndCommitForMajority(long remoteIndex){
         for(long i = lastApplied+1;i<=remoteIndex;i++){
-            System.out.println("now execute " + i);
+            RaftLog raftLog = logs.get((int)i);
+            //将commit成功返回给client
+            raftLog.sendResponse();
+            System.out.println("new log " + raftLog.getLog());
         }
         if (remoteIndex>lastApplied){
             lastApplied = remoteIndex;
@@ -127,7 +130,10 @@ public class Leader extends State {
                 }
             }
             if (count>clusterSize/2){
-                System.out.println("now execute " + tmpIndex);
+                RaftLog raftLog = logs.get((int)tmpIndex);
+                //将commit成功返回给client
+                raftLog.sendResponse();
+                System.out.println("new log " + raftLog.getLog());
                 lastApplied = tmpIndex;
             }else{
                 return;
@@ -177,6 +183,24 @@ public class Leader extends State {
         }
     }
 
+
+    LinkedList<RaftLog> raftLogList;
+
+    public void insertEntryIntoList(final String entry,final Object ctx){
+        raftLogList.add(new RaftLog(entry,ctx));
+    }
+
+    private String getStringForRpc(){
+        StringBuilder result = new StringBuilder();
+        for (int i=0;i<raftLogList.size();i++){
+            result.append(raftLogList.get(i).getLog());
+            result.append(';');
+        }
+        result.deleteCharAt(result.length()-1);
+
+        return result.toString();
+    }
+
     public class HeartBeatSendTask extends RaftDelayedTask {
         HeartBeatSendTask(State state,long time){
             super(state,time);
@@ -189,17 +213,19 @@ public class Leader extends State {
                 //这里用random超时就可以实现了
                 RequestOptions opts=new RequestOptions(ResponseMode.GET_ALL, 200);
 
-                if (stringBuilder.length()==0){
+                if (raftLogList.size()==0){
+                    /*
                     Random random = new Random();
                     if (random.nextInt(20)==0){
                         //System.out.println("add new Entry");
                         stringBuilder.append(currentTerm + ","+(lastLog.getIndex()+1)+",Extra log");
                     }
+                    */
                     call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),null,commitIndex,"all");
                 }else{
-                    call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),stringBuilder.toString().getBytes(),commitIndex,"all");
-                    insertEntriesIntoLogs(stringBuilder.toString().getBytes());
-                    stringBuilder = new StringBuilder();
+                    call.setArgs(currentTerm,selfID,lastLog.getIndex(),lastLog.getTerm(),getStringForRpc().getBytes(),commitIndex,"all");
+                    insertEntriesIntoLogs(raftLogList);
+                    raftLogList = new LinkedList<RaftLog>();
                 }
                 stateManager.submitIO(new HeartBeatIOTask(opts,call,null));
 
@@ -212,7 +238,6 @@ public class Leader extends State {
                     //这个value存的是下一次prevlog的index,所以get的byte是不包括这一条的.
                     RaftLog raftLog = state.getLog(entry.getValue());
                     byte[] byteForFollower = State.getByteForFollower(raftLog.getIndex());
-                    System.out.println("log array size is " + logs.size());
                     call.setArgs(currentTerm,selfID,raftLog.getIndex(),raftLog.getTerm(),byteForFollower,commitIndex,entry.getKey().toString());
                     ArrayList<Address> arrayList = new ArrayList();
                     arrayList.add(entry.getKey());

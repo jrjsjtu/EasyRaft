@@ -1,6 +1,8 @@
 package worker;
 
 import EasyRaft.StateManager;
+import ServerIO.NetworkIO;
+import ServerIO.RaftKeeper;
 import org.jgroups.JChannel;
 import org.jgroups.Message;
 import org.jgroups.ReceiverAdapter;
@@ -26,6 +28,8 @@ public class MainWorker{
     public static void main(String[] args){
         try {
             StateManager stateManager = new StateManager();
+            RaftKeeper.setStateManager(stateManager);
+            new NetworkIO(30303);
         } catch (Exception e) {
             e.printStackTrace();
         }

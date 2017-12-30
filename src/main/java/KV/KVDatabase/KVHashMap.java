@@ -1,4 +1,4 @@
-package KVDatabase;
+package KV.KVDatabase;
 
 import javax.print.attribute.HashAttributeSet;
 import java.util.HashMap;

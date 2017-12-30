@@ -1,5 +1,8 @@
 package EasyRaft;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
 import org.jgroups.Address;
 import org.jgroups.JChannel;
 import org.jgroups.View;
@@ -31,8 +34,7 @@ public class StateManager {
     JChannel channel;
 
     private State current;
-
-
+    private View view;
     public StateManager(){
         delayQueue = new DelayQueue();
         taskQueue = new LinkedBlockingQueue();
@@ -49,7 +51,7 @@ public class StateManager {
         try{
             channel=new JChannel();
             disp=new RpcDispatcher(channel, this);
-            disp.setMembershipListener(new ClusterInfoReceiver());
+            disp.setMembershipListener(new ClusterInfoReceiver(this));
             channel.connect("RpcDispatcherTestGroup");
         }catch (Exception e){
             e.printStackTrace();
@@ -68,6 +70,20 @@ public class StateManager {
         this.current = tmpStat;
     }
 
+    public void commit(final String entry, final Object ctx){
+        submitRunnable(new Runnable() {
+            public void run() {
+                if (isLeader()){
+                    ((Leader)current).insertEntryIntoList(entry,ctx);
+                }else{
+                    ByteBuf byteBuf = Unpooled.buffer();
+                    byteBuf.writeInt(12);
+                    byteBuf.writeBytes("wrong leader".getBytes());
+                    ((ChannelHandlerContext)ctx).writeAndFlush(byteBuf);
+                }
+            }
+        });
+    }
     //这里与论文中的实现有所不同,在返回值中加入了,调用rpc时的index值,方便程序的阅读性
     //但我没有在每个状态的appendEntries里加,而是在这边的返回值中统一加
     public String AppendEntries(long term,String leaderId,long prevLogIndex,long prevLogTerm,byte[] entries,long leaderCommit,String target){
@@ -214,7 +230,9 @@ public class StateManager {
                             if (raftDelayedTask.stillLastState(current)){
                                 ((Runnable)(rpcPara)).run();
                             }
-                        }else{
+                        }else if(rpcPara instanceof Runnable){
+                            ((Runnable)(rpcPara)).run();
+                        } else{
                             System.out.println("illegal type");
                         }
                     }

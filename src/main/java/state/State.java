@@ -1,19 +1,9 @@
 package state;
 
 import EasyRaft.StateManager;
-import Utils.RaftArray;
 import org.jgroups.JChannel;
-import org.jgroups.Message;
-import org.jgroups.View;
-import worker.MainWorker;
 
 import java.util.*;
-import java.util.concurrent.Delayed;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by jrj on 17-10-30.
@@ -48,7 +38,8 @@ public abstract class State implements RaftRpc{
         StringBuilder stringBuilder = new StringBuilder();
         for (int i=(int)index+1;i<logs.size();i++){
             RaftLog tmp = logs.get(i);
-            stringBuilder.append(tmp.getTerm()).append(',').append(tmp.getIndex()).append(',').append(tmp.getLog()).append('|');
+            //stringBuilder.append(tmp.getTerm()).append(',').append(tmp.getIndex()).append(',').append(tmp.getLog()).append('|');
+            stringBuilder.append(tmp.getLog()).append(';');
         }
         stringBuilder.deleteCharAt(stringBuilder.length()-1);
         return stringBuilder.toString().getBytes();
@@ -73,13 +64,6 @@ public abstract class State implements RaftRpc{
         return term==lastLogTerm;
     }
 
-    public static void removeExtraLog(long lastLogIndex){
-        int endPosition = logs.size()-1;
-        for (int i=endPosition;i>lastLogIndex;i--){
-            logs.remove(i);
-        }
-    }
-
     public static void setStateManager(StateManager stateManager){
         State.stateManager = stateManager;
     }
@@ -88,33 +72,36 @@ public abstract class State implements RaftRpc{
         return (votedFor == null) || votedFor.equals(candidateId);
     }
 
+    /*
+    public static void insertEntriesIntoLogs(LinkedList<String> entries){
+        for (String entry:entries){
+            insert0(entry);
+        }
+    }
+    */
+    public static void insertEntriesIntoLogs(LinkedList<RaftLog> entries){
+        for (RaftLog entry:entries){
+            entry.setTerm(currentTerm);
+            entry.setIndex(lastLog.getIndex()+1);
+            lastLog = entry;
+            logs.add(entry);
+        }
+    }
+
+    private static void insert0(String entry){
+        long localIndex;
+        localIndex = lastLog.getIndex();
+        RaftLog newLog = new RaftLog(currentTerm,localIndex+1,entry);
+        System.out.println("insert entry into log " + entry );
+        lastLog = newLog;
+        logs.add(newLog);
+    }
+
     public static void insertEntriesIntoLogs(byte[] entries){
-        String[] tmpEntryList = new String(entries).split("\\|");
-        for (String entry:tmpEntryList){
-            String[] raftInfo = entry.split(",");
-            long raftTerm,raftIndex;
-            raftTerm = Long.parseLong(raftInfo[0]);
-            raftIndex = Long.parseLong(raftInfo[1]);
-            long localTerm,localIndex;
-            localTerm = lastLog.getTerm();
-            localIndex = lastLog.getIndex();
-            RaftLog newLog = new RaftLog(raftTerm,raftIndex,raftInfo[2]);
-            if (raftIndex==(localIndex+1)){
-                //正好是现在lastLog的后面一条,才可以插入
-                System.out.println("insert entry into log " + entry );
-                lastLog = newLog;
-                logs.add(newLog);
-            }else if(raftIndex<logs.size()){
-                //3.如果已经存在的日志条目和新的产生冲突（索引值相同但是任期号不同），删除这一条和之后所有的 （5.3 节）
-                if (raftTerm!=localTerm){
-                    for (int i=logs.size()-1;i>=raftIndex;i--){
-                        logs.remove(i);
-                    }
-                    lastLog = newLog;
-                    logs.add(newLog);
-                }
-                //如果匹配就什么都不做了
-            }
+        String string = new String(entries);
+        String[] strArray = string.split(";");
+        for (String entry:strArray) {
+            insert0(entry);
         }
     }
 }

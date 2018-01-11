@@ -4,6 +4,7 @@ import EasyRaft.StateManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import sun.nio.ch.Net;
 
 import java.util.ArrayList;
 
@@ -14,15 +15,15 @@ import java.util.ArrayList;
 public class RaftKeeper {
     private static StateManager stateManager;
 
-
     public static void setStateManager(StateManager stateManager0){
         stateManager = stateManager0;
     }
-    private static final char LeaderSelection = '0';
-    private static final char RegisterWatcher = '1';
-    private static final char AllocateSlot = '2';
-    private static final char RegisterMember = '3';
-    private static final char AppendLog = '4';
+    public static final char LeaderSelection = '0';
+    public static final char RegisterWatcher = '1';
+    public static final char AllocateSlot = '2';
+    public static final char RegisterMember = '3';
+    public static final char AppendLog = '4';
+    public static final char LeaveCluster = '5';
 
     private static ArrayList<String> memberList;
     private static ArrayList<ChannelHandlerContext> wathcerList;
@@ -53,7 +54,26 @@ public class RaftKeeper {
         return null;
     }
 
-    public static void processRegisterWatcher(ChannelHandlerContext ctx,String entry){
+    public static String processRequest(char c,ChannelHandlerContext ctx){
+        String address = ctx.channel().remoteAddress().toString();
+        switch (c){
+            case LeaveCluster:
+                /*
+                if(memberList.contains(address)){
+                    memberList.remove(address);
+                    System.out.println("remove memberList " + address);
+                }
+                */
+                if(wathcerList.contains(ctx)){
+                    wathcerList.remove(ctx);
+                    System.out.println("remove ctx " + address);
+                }
+                break;
+        }
+        return null;
+    }
+
+    private static void processRegisterWatcher(ChannelHandlerContext ctx,String entry){
         synchronized (wathcerList){
             wathcerList.add(ctx);
             ByteBuf byteBuf = Unpooled.buffer();
@@ -72,7 +92,7 @@ public class RaftKeeper {
         }
     }
 
-    public static void processRegisterMember(final ChannelHandlerContext ctx){
+    private static void processRegisterMember(final ChannelHandlerContext ctx){
         String entryId = "add:" + ctx.pipeline().channel().remoteAddress().toString();
         Runnable callBack = new Runnable() {
             public void run() {
@@ -101,27 +121,33 @@ public class RaftKeeper {
         stateManager.commit(entryId,callBack);
     }
 
-    public static void processLeaderInsertLog(ChannelHandlerContext ctx,String entry){
+    private static void processLeaderInsertLog(ChannelHandlerContext ctx,String entry){
         stateManager.commit(entry,ctx);
     }
 
-    public ByteBuf processRegisterWatcher(ChannelHandlerContext ctx){
-        return null;
+
+    public static void initCheckThread(){
+        checkLeaderThread.start();
     }
 
-    public ByteBuf processAllocateSlot(ChannelHandlerContext ctx){
-        return null;
+    public static void setLeaderPort(int leaderPort1){
+        leaderPort = leaderPort1;
     }
-
-
-    public static void main(String[] args){
-        try {
-            StateManager stateManager = new StateManager();
-            RaftKeeper.setStateManager(stateManager);
-            //raftKeeper.processLeaderSelection("test log");
-        } catch (Exception e) {
-            e.printStackTrace();
+    private static int leaderPort = -1;
+    private static Thread checkLeaderThread = new Thread(new Runnable() {
+        public void run() {
+            while(true){
+                try {
+                    if (stateManager.isLeader() && leaderPort != -1){
+                        //默认情况下,会阻塞在这个NetworkIO的初始化方法上.所以不用担心多次重复地初始化客户端.
+                        //但要是出现端口没有及时释放或者,leader角色在集群中震荡,NetworkIO的初始化会报错,这时候就让程序等一秒.
+                        NetworkIO networkIO = new NetworkIO(leaderPort);
+                    }
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
-
-    }
+    },"checkLeaderThread");
 }

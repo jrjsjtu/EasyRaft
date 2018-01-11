@@ -49,6 +49,6 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        String address = ctx.channel().remoteAddress().toString();
+        RaftKeeper.processRequest(RaftKeeper.LeaveCluster,ctx);
     }
 }

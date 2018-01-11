@@ -1,4 +1,4 @@
-package state;
+package EasyRaft.state;
 
 import org.jgroups.Message;
 

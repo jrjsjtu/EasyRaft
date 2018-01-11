@@ -1,20 +1,15 @@
-package state;
+package EasyRaft.state;
 
 import EasyRaft.AppendRpcResult;
 import EasyRaft.RaftDelayedTask;
 import EasyRaft.StateManager;
-import io.netty.channel.ChannelHandlerContext;
 import org.jgroups.Address;
-import org.jgroups.Message;
-import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.ResponseMode;
 import org.jgroups.util.*;
-import worker.MainWorker;
 import org.jgroups.util.UUID;
 import java.util.*;
-import java.util.concurrent.*;
 
 /**
  * Created by jrj on 17-10-30.

@@ -3,10 +3,6 @@ package EasyRaft;
 import org.jgroups.Message;
 import org.jgroups.ReceiverAdapter;
 import org.jgroups.View;
-import state.Leader;
-import state.State;
-
-import java.nio.charset.Charset;
 
 /**
  * Created by jrj on 17-12-20.

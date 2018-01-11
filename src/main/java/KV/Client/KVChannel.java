@@ -15,6 +15,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -28,11 +29,17 @@ public class KVChannel implements KVProtocol{
     private static ChannelHandlerContext channelHandlerContext;
     private static HashMap<Long,String> indexThreadMap;
     //这里的index是一致性hash之后的index
-    private static HashMap<Integer,ChannelHandlerContext> indexContextMap;
-
+    private static SocketChannel[] indexContextMap;
+    private static Semaphore[] semaphores;
+    private static int[] kvPorts = new int[]{10200,10201};
+    public static String lock;
     static{
         indexThreadMap = new HashMap<Long, String>();
-        indexContextMap = new HashMap<Integer, ChannelHandlerContext>();
+        indexContextMap = new SocketChannel[2];
+        semaphores = new Semaphore[2];
+        for (int i=0;i<2;i++){
+            semaphores[i] = new Semaphore(1);
+        }
     }
     EventLoopGroup group;
     KVChannel() throws Exception{
@@ -61,12 +68,18 @@ public class KVChannel implements KVProtocol{
 
     }
 
+    public void waitForConnection() throws Exception{
+        semaphore.acquire();
+    }
+    Semaphore semaphore = new Semaphore(-1);
     public boolean connectServer(final String hostName, final int port){
         Bootstrap b = new Bootstrap();
         b.group(group).channel(NioSocketChannel.class).
-                remoteAddress(new InetSocketAddress("127.0.0.1", 30303)).
+                remoteAddress(new InetSocketAddress("127.0.0.1", port)).
                 handler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel ch) throws Exception {
+                        indexContextMap[port-10200] = ch;
+                        semaphore.release();
                         ch.pipeline().addLast(new RequestDecoder());
                         ch.pipeline().addLast(new ResponseHandler(hostName,port));
                     }
@@ -80,35 +93,52 @@ public class KVChannel implements KVProtocol{
         return true;
     }
 
-    public static void awaitClient(long index){
+    public static void awaitClient(int index){
+        /*
         String key;
         synchronized (indexThreadMap){
             key = indexThreadMap.get(index);
+            indexThreadMap.remove(index);
         }
         synchronized (key){
             key.notify();
         }
+        */
+        semaphores[index].release();
+        /*
+        synchronized (lock){
+            lock.notify();
+        }
+        */
     }
 
     public static void setChannelHandlerContext(ChannelHandlerContext ctx){
         channelHandlerContext = ctx;
     }
 
+
     public void put(long requestIndex, String key, String value) throws Exception {
-        int payLoadSize = key.length() + value.length() + 8 + 8;
+        int payLoadSize = key.length() + value.length() + 8 + 4;
         ByteBuf byteBuf = Unpooled.buffer(payLoadSize+4);
-        byteBuf.writeInt(payLoadSize).writeLong(requestIndex);
+
+        int idx = key.hashCode()%2;
+
+        byteBuf.writeInt(payLoadSize).writeInt(idx);
         byteBuf.writeInt(key.length()).writeBytes(key.getBytes());
         byteBuf.writeInt(value.length()).writeBytes(value.getBytes());
-        synchronized (channelHandlerContext){
-            indexThreadMap.put(requestIndex,key);
-        }
 
+        //防止一个服务器同时被两个占用
+        //System.out.println("output   " + idx);
+        semaphores[idx].acquire();
+        indexContextMap[idx].writeAndFlush(byteBuf);
+        /*
         synchronized (key){
-            channelHandlerContext.writeAndFlush(byteBuf);
+            indexContextMap[idx].writeAndFlush(byteBuf);
+            lock = key;
             key.wait();
         }
-
+        */
+        //channelHandlerContext.writeAndFlush(byteBuf);
     }
 
     static class SpinLock {

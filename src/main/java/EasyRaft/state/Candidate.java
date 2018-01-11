@@ -1,21 +1,13 @@
-package state;
+package EasyRaft.state;
 
-import EasyRaft.AppendRpcResult;
 import EasyRaft.RaftDelayedTask;
 import EasyRaft.StateManager;
 import EasyRaft.VoteRpcResult;
-import Utils.Timeout;
-import Utils.TimerTask;
-import org.jgroups.Address;
-import org.jgroups.util.UUID;
-import org.jgroups.Message;
-import org.jgroups.View;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.ResponseMode;
 import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
-import worker.MainWorker;
 
 import java.util.*;
 

@@ -1,7 +1,7 @@
-package ServerIO;
+package EasyRaft.ServerIO;
 
 
-import ServerIO.handler.RequestDecoder;
+import EasyRaft.ServerIO.handler.RequestDecoder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;

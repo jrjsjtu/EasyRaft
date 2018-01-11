@@ -3,21 +3,15 @@ package EasyRaft;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import org.jgroups.Address;
 import org.jgroups.JChannel;
 import org.jgroups.View;
 import org.jgroups.blocks.RpcDispatcher;
-import org.jgroups.util.RspList;
-import state.Candidate;
-import state.Follower;
-import state.Leader;
-import state.State;
+import EasyRaft.state.Candidate;
+import EasyRaft.state.Follower;
+import EasyRaft.state.Leader;
+import EasyRaft.state.State;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by jrj on 17-12-11.

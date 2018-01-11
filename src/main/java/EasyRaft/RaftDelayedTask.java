@@ -1,7 +1,6 @@
 package EasyRaft;
 
-import state.Leader;
-import state.State;
+import EasyRaft.state.State;
 
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;

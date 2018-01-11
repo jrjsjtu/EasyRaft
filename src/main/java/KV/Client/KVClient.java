@@ -1,17 +1,20 @@
 package KV.Client;
 
+import EasyRaft.client.RaftClient;
+
+import java.util.ArrayList;
+
 /**
  * Created by jrj on 17-12-24.
  */
 public class KVClient {
-    private int[] ports = new int[]{30303,30304,30305};
+    private static int[] kvPorts = new int[]{10200,10201};
     private KVChannel kvChannel;
     KVClient(){
         try {
             kvChannel = new KVChannel();
-            ports = new int[]{30303,30304,30305};
             boolean succeed = false;
-            for (int port : ports){
+            for (int port : kvPorts){
                 boolean tmp = kvChannel.connectServer("127.0.0.1",port);
                 if (tmp){succeed = tmp;}
             }
@@ -34,11 +37,37 @@ public class KVClient {
         System.out.println(System.currentTimeMillis() -start);
         kvClient.finish();
         */
+        RaftClient raftClient = new RaftClient();
+        try {
+            raftClient.registerWatcher("test");
+            ArrayList<String> strings =raftClient.getMemberList();
+
+
+            if (strings.size()>=2){
+                KVChannel kvChannel = new KVChannel();
+                kvChannel.connectServer("127.0.0.1",10200);
+                kvChannel.connectServer("127.0.0.1",10201);
+                kvChannel.waitForConnection();
+                long start = System.currentTimeMillis();
+                for (long i=0;i<150000;i++){
+                    kvChannel.put(1l,"aaa","bbb");
+                    //kvChannel.put(1l,"aaa1","bbb");
+                }
+                System.out.println(System.currentTimeMillis() -start);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("end!!!!");
+        /*
         try {
             KVChannel kvChannel = new KVChannel();
             long start = System.currentTimeMillis();
             for (long i=0;i<3;i++){
                 kvChannel.put(i,"aaa","bbb");
+                kvChannel.put(i,"aaa1","bbb");
             }
             System.out.println(System.currentTimeMillis() -start);
             //kvChannel.put(1,"aaa","bbb");
@@ -46,5 +75,6 @@ public class KVClient {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        */
     }
 }

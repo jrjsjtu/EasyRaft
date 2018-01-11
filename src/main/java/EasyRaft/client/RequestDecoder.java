@@ -1,4 +1,4 @@
-package client;
+package EasyRaft.client;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -11,12 +11,12 @@ import java.util.ArrayList;
  * Created by jrj on 17-12-29.
  */
 public class RequestDecoder extends ChannelInboundHandlerAdapter {
-    ByteBuf header,payLoad;
-    boolean readHeaderCompleted;
     int payLoadSize;
-    public static ChannelHandlerContext ctx;
-    public RequestDecoder(){
-        readHeaderCompleted = false;
+    ByteBuf header,payLoad;
+    RaftClient raftClient;
+
+    public RequestDecoder(RaftClient raftClient){
+        this.raftClient = raftClient;
     }
 
     @Override
@@ -55,26 +55,30 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
         payLoad.readBytes(bytes);
         //registerMember的返回结果总是
         switch (c){
+            case RaftClient.RegisterWatcher:
+                updateArraylist(bytes);
+                raftClient.notifyClient();
+                break;
             case RaftClient.WatcherChanged:
                 updateArraylist(bytes);
                 break;
             case RaftClient.AppendLog:
-                RaftClient.notifyClient();
+                raftClient.notifyClient();
                 break;
             case RaftClient.RegisterMember:
                 updateArraylist(bytes);
-                RaftClient.notifyClient();
+                raftClient.notifyClient();
                 break;
         }
     }
 
     private void updateArraylist(byte[] bytes){
-        ArrayList<String> strings = RaftClient.getMemberList();
+        ArrayList<String> strings = raftClient.getMemberList();
         synchronized (strings){
             strings.clear();
+            System.out.println(new String(bytes));
             String[] tmps = new String(bytes).split("/");
             for (String tmp:tmps){
-                System.out.println(tmp);
                 strings.add(tmp);
             }
         }
@@ -82,6 +86,6 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx1) throws Exception {
-        ctx = ctx1;
+
     }
 }

@@ -1,8 +1,7 @@
 package EasyRaft;
 
-import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
-import state.State;
+import EasyRaft.state.State;
 
 /**
  * Created by jrj on 17-12-13.

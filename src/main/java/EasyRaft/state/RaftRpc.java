@@ -1,4 +1,4 @@
-package state;
+package EasyRaft.state;
 
 /**
  * Created by jrj on 17-11-7.

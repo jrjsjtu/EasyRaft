@@ -1,4 +1,4 @@
-package ServerIO;
+package EasyRaft.ServerIO;
 
 import EasyRaft.StateManager;
 import io.netty.buffer.ByteBuf;
@@ -6,7 +6,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 /**
  * Created by jrj on 17-12-28.
@@ -55,7 +54,22 @@ public class RaftKeeper {
     }
 
     public static void processRegisterWatcher(ChannelHandlerContext ctx,String entry){
-        stateManager.commit(entry,ctx);
+        synchronized (wathcerList){
+            wathcerList.add(ctx);
+            ByteBuf byteBuf = Unpooled.buffer();
+            StringBuilder stringBuilder = new StringBuilder();
+            for (String tmp:memberList){
+                stringBuilder.append(tmp);
+            }
+            stringBuilder.deleteCharAt(0);
+            String result = stringBuilder.toString();
+
+            byteBuf.writeInt(result.length()+1);
+            byteBuf.writeByte(RegisterWatcher);
+            byteBuf.writeBytes(result.getBytes());
+
+            ctx.writeAndFlush(byteBuf);
+        }
     }
 
     public static void processRegisterMember(final ChannelHandlerContext ctx){

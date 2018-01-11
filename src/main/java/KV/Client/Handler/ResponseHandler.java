@@ -28,7 +28,7 @@ public class ResponseHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
-        long ackIndex = buf.readLong();
+        int ackIndex = buf.readInt();
         buf.release();
         //System.out.println(ackIndex);
         KVChannel.awaitClient(ackIndex);

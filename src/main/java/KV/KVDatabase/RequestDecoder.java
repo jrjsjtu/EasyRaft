@@ -39,7 +39,6 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
         if (payLoad != null && payLoad.writableBytes()>0){
             buf.readBytes(payLoad);
             if (payLoad.writableBytes() == 0){
-                System.out.println(ctx.pipeline().channel().remoteAddress().toString());
                 ctx.fireChannelRead(payLoad);
                 header.resetWriterIndex();
                 header.resetReaderIndex();

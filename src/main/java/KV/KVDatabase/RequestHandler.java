@@ -13,7 +13,7 @@ public class RequestHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
-        long index = buf.readLong();
+        int index = buf.readInt();
         int keySize = buf.readInt();
         byte[] keyBytes = new byte[keySize];
         buf.readBytes(keyBytes);
@@ -23,10 +23,11 @@ public class RequestHandler extends ChannelInboundHandlerAdapter {
         buf.readBytes(valueBytes);
 
         KVHashMap.hashMap.put(new String(keyBytes),new String(valueBytes));
-        ByteBuf byteBuf = Unpooled.buffer(12);
-        byteBuf.writeInt(8);
-        byteBuf.writeLong(index);
+        ByteBuf byteBuf = Unpooled.buffer(8);
+        byteBuf.writeInt(4);
+        byteBuf.writeInt(index);
 
+        //System.out.println("receive " + new String(keyBytes)  + "  " + new String(valueBytes));
         ctx.writeAndFlush(byteBuf);
     }
 }

@@ -97,7 +97,7 @@ public abstract class State implements RaftRpc{
         logs.add(newLog);
     }
 
-    public static void insertEntriesIntoLogs(byte[] entries){
+    static void insertEntriesIntoLogs(byte[] entries){
         String string = new String(entries);
         String[] strArray = string.split(";");
         for (String entry:strArray) {

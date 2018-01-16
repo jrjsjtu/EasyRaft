@@ -32,10 +32,7 @@ public class RaftClient {
     private ArrayList<String> memberList;
     final Semaphore semp = new Semaphore(1);
 
-    private static int[] kvPorts = new int[]{10200,10201};
-    private static int[] raftPorts = new int[]{30303,30304};
-
-    public void notifyClient(){
+    void notifyClient(){
         synchronized (lock){
             lock.notify();
         }
@@ -44,9 +41,6 @@ public class RaftClient {
 
     //
 
-    public ArrayList<String> getMemberList(){
-        return memberList;
-    }
 
     SocketChannel ch;
     public RaftClient(){
@@ -72,20 +66,21 @@ public class RaftClient {
             e.printStackTrace();
         }
     }
-    //一旦不能和raft服务通信就停止服务!
-    public void sendLog(String log) throws Exception{
-        while (ch == null){}
-        ByteBuf byteBuf = getByteBuffer(log,AppendLog);
-        synchronized (log){
-            lock = log;
-            ch.writeAndFlush(byteBuf);
-            log.wait();
-        }
+
+    public ArrayList<String> getMemberList(){
+        return memberList;
     }
 
-    //这里api就只提供一个joinCluster.
-    //返回结果:现在cluster中的成员.
-    //还有注册watcher观察cluster变化的默认行为.
+    /**
+     * The api for join the cluster naming @clusterName,
+     * this api will bring 2 extra effect
+     * 1.the change of the cluster will be notified,then onMemberFails will be called.This implies the registerWatcher is automatically called.
+     * 2.once join successfully, the alive ip:port in the cluster will be passed to onJoinCluster as a parameter, the logs will be another parameter.
+     *
+     * @param clusterName the name of the cluster the caller want to join, it is designed for server which want to provide service with the help of raft
+     * @param onJoinCluster the callBack Function when successFully join the Cluster.
+     * @param onMemberFails the callBack Function when a member in the cluster down.
+     */
     public void joinCluster(String clusterName) throws Exception{
         while (ch == null){}
         semp.acquire();
@@ -97,6 +92,11 @@ public class RaftClient {
         }
     }
 
+    /**
+     * The api for watch the change of @clusterName,
+     *
+     * @param clusterName current term of the caller of the rpc
+     */
     public void registerWatcher(String clusterName) throws Exception{
         while (ch == null){}
         semp.acquire();
@@ -117,24 +117,5 @@ public class RaftClient {
 
     public String getLocalAddress(){
         return ch.localAddress().toString();
-    }
-    public static void main(String[] args){
-        /*
-        RaftClient raftClient = new RaftClient();
-        Server kvServer;
-        try{
-            raftClient.joinCluster("aaa");
-            ArrayList<String> memberList = raftClient.getMemberList();
-            String localAddress = raftClient.getLocalAddress().substring(1);
-            for (int i=0;i<memberList.size();i++){
-                if (memberList.get(i).equals(localAddress)){
-                    kvServer = new Server(kvPorts[i]);
-                    break;
-                }
-            }
-        }catch (Exception e){
-            e.printStackTrace();
-        }
-        */
     }
 }

@@ -9,6 +9,14 @@ import java.nio.ByteBuffer;
 /**
  * Created by jrj on 17-11-7.
  */
+
+/**
+ * The struct to store log.
+ * The @field append is an important field.It is used to run the callback when the log is successfully committed.
+ * The callback framework is hard to design. In order to avoid race condition, the callback is executed in the thread
+ * which is the only thread in the easyraft.However object can be channelHandlerContext or Runnable, which is not very
+ * elegent. And the append must be set null when sendResponse is called for gc.
+ */
 public class RaftLog {
     long term;long index;
     String log;
@@ -52,7 +60,7 @@ public class RaftLog {
         return log;
     }
 
-    public boolean asOrMoreUpToDate(long lastLogIndex,long lastLogTerm){
+    boolean asOrMoreUpToDate(long lastLogIndex,long lastLogTerm){
         if (lastLogTerm == term){
             return index>=lastLogIndex;
         }else{
@@ -60,7 +68,7 @@ public class RaftLog {
         }
     }
 
-    public boolean moreUpToDate(long lastLogIndex,long lastLogTerm){
+     boolean moreUpToDate(long lastLogIndex,long lastLogTerm){
         if (lastLogTerm == term){
             return index>lastLogIndex;
         }else{

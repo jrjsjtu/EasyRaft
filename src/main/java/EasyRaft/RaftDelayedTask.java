@@ -18,6 +18,7 @@ public abstract class RaftDelayedTask implements Runnable,Delayed {
         this.time = time;
         this.state = state;
     }
+
     public long getDelay(TimeUnit unit) {
         long r = unit.convert(time - System.currentTimeMillis(), TimeUnit.MICROSECONDS);
         return r;

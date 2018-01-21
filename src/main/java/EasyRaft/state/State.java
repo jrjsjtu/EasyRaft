@@ -25,6 +25,18 @@ public abstract class State implements RaftRpc{
     static{
         logs.add(lastLog);
     }
+
+    public static String getAllLogs(){
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i=1;i<logs.size();i++){
+            stringBuilder.append(logs.get(i).getLog());
+            stringBuilder.append('|');
+        }
+        if (stringBuilder.length()>0){
+            stringBuilder.deleteCharAt(stringBuilder.length()-1);
+        }
+        return stringBuilder.toString();
+    }
     //protected static HashMap<Long,ArrayList<String>> logs = new HashMap<Long, ArrayList<String>>();
 
     public static RaftLog getLog(long index){

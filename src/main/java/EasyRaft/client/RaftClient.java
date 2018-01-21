@@ -11,6 +11,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -20,23 +21,27 @@ public class RaftClient {
     EventLoopGroup group;
     Bootstrap b;
 
-    public static final char LeaderSelection = '0';
     public static final char RegisterWatcher = '1';
-    public static final char AllocateSlot = '2';
     public static final char RegisterMember = '3';
-    public static final char AppendLog = '4';
-    public static final char WatcherChanged = '5';
+    public static final char CommitLeaveLog = '6';
+    public static final char ClientWakeUp = '7';
+
+    public static final char LeaveCluster = '5';
+    public static final char ServerJoinCommited = '8';
+    public static final char ServerLeaveCommited = '9';
 
 
     private String lock;
     private ArrayList<String> memberList;
+    private int commitIndex;
     final Semaphore semp = new Semaphore(1);
 
     void notifyClient(){
-        synchronized (lock){
-            lock.notify();
-        }
         semp.release();
+    }
+
+    void getSemaphore() throws Exception{
+        semp.acquire();
     }
 
     //
@@ -46,9 +51,9 @@ public class RaftClient {
     public RaftClient(){
         //lock用来实现request的response收到后的提醒
         //Semaphore 来保证同一时间只能有一个request on the fly主要是为了程序逻辑的实现方便.
-        lock = "lock";
         memberList = new ArrayList<String>();
-
+        commitIndex = 0;
+        lock = "lock";
         group = new NioEventLoopGroup(1);
         b = new Bootstrap();
         final RaftClient tmp =this;
@@ -78,18 +83,12 @@ public class RaftClient {
      * 2.once join successfully, the alive ip:port in the cluster will be passed to onJoinCluster as a parameter, the logs will be another parameter.
      *
      * @param clusterName the name of the cluster the caller want to join, it is designed for server which want to provide service with the help of raft
-     * @param onJoinCluster the callBack Function when successFully join the Cluster.
-     * @param onMemberFails the callBack Function when a member in the cluster down.
      */
     public void joinCluster(String clusterName) throws Exception{
         while (ch == null){}
-        semp.acquire();
+        getSemaphore();
         ByteBuf byteBuf = getByteBuffer(clusterName,RegisterMember);
-        synchronized (clusterName){
-            lock = clusterName;
-            ch.writeAndFlush(byteBuf);
-            clusterName.wait();
-        }
+        ch.writeAndFlush(byteBuf);
     }
 
     /**
@@ -99,13 +98,9 @@ public class RaftClient {
      */
     public void registerWatcher(String clusterName) throws Exception{
         while (ch == null){}
-        semp.acquire();
+        getSemaphore();
         ByteBuf byteBuf = getByteBuffer(clusterName,RegisterWatcher);
-        synchronized (clusterName){
-            lock = clusterName;
-            ch.writeAndFlush(byteBuf);
-            clusterName.wait();
-        }
+        ch.writeAndFlush(byteBuf);
     }
     private ByteBuf getByteBuffer(String log,char logType){
         ByteBuf byteBuf = Unpooled.buffer(log.length() + 1 + 4);

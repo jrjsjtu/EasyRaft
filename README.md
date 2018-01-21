@@ -4,7 +4,7 @@
 但是实际实现起来有各种问题,主要问题因为raft的append Entry需要有一个client去主动调用,
 如果KV Server和作为leader的raft一起挂掉.那么无法确定raft的log是否成功commit.
 
-作为解决方法,只能回到原点,模仿kafka的结构.将raft的同步剥离出来作为一个独立的服务.
+作为解决方法,只能回到原点,模仿kafka的做法.将raft的同步剥离出来作为一个独立的服务.
 
 因此这个项目最后会导出四个jar包  
 1.EasyRaft.jar作为Raft的Server  
@@ -31,8 +31,8 @@ join:192.168.1.105:55570
 集群如何感知KVServer的crash并作出反映.
 这里就引入Leader的概念了,先写入Raft日志的server,默认为Leader.在上述例子中就是192.168.1.102:55564
 当一台KVServer被Raft提醒Crash了之后,
-如果Crash的Server不是Leader,那么由Leader写入Leave:Crash Ip:Crash Port
-如果Crash的Server是Leader,那么由Leader后一个Ip:Port所在的进程写入Leave:Crash Ip:Crash Port,
+如果Crash的Server不是Leader,那么由Leader写入Leave:{Crash Ip}:{Crash Port}
+如果Crash的Server是Leader,那么由Leader后一个Ip:Port所在的进程写入Leave:{Crash Ip}:{Crash Port},
 并且后面一个Ip自动晋升为Leader
 
 如果所有的KV Server同时一起挂掉了?

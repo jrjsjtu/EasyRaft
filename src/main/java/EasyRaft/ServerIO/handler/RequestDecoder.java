@@ -49,6 +49,6 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        RaftKeeper.processChannelInactive(RaftKeeper.LeaveCluster,ctx);
+        RaftKeeper.processChannelInactive(ctx);
     }
 }

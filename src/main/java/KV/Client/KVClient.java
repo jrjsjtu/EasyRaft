@@ -1,80 +1,62 @@
 package KV.Client;
 
 import EasyRaft.client.RaftClient;
+import EasyRaft.client.callBack.RaftCallBack;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by jrj on 17-12-24.
  */
 public class KVClient {
-    private static int[] kvPorts = new int[]{10200,10201};
-    private KVChannel kvChannel;
+    RaftClient raftClient;
+    KVChannel kvChannel;
+    AtomicInteger atomicInteger = new AtomicInteger(0);
     KVClient(){
+        raftClient = new RaftClient();
+        raftClient.joinRaft();
+        ArrayList<String> arrayList = raftClient.getCurrentSlot();
         try {
-            kvChannel = new KVChannel();
-            boolean succeed = false;
-            for (int port : kvPorts){
-                boolean tmp = kvChannel.connectServer("127.0.0.1",port);
-                if (tmp){succeed = tmp;}
+            kvChannel = new KVChannel(2);
+            for(String tmp:arrayList){
+                String[] info = tmp.split(":");
+                kvChannel.connectServer(info[0],Integer.parseInt(info[1]),Integer.parseInt(info[2]));
             }
-            if (!succeed){
-                throw new Exception("all server down");
-            }
-            kvChannel.getLeadrInfo();
-        }catch (Exception e){
+            kvChannel.waitForConnection();
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+    public void put(String key,String value) throws Exception{
+        kvChannel.put(key,value);
+    }
+
+    public String get(String key) throws Exception{
+        return kvChannel.get(key);
+    }
     public static void main(String[] args){
-        /*
         KVClient kvClient = new KVClient();
-
         long start = System.currentTimeMillis();
-        for(int i=0;i<300000;i++){
-            kvClient.put("aaa"+i,"bbbb"+i);
-        }
-        System.out.println(System.currentTimeMillis() -start);
-        kvClient.finish();
-        */
-        RaftClient raftClient = new RaftClient();
+
         try {
-            raftClient.registerWatcher("test");
-            ArrayList<String> strings =raftClient.getMemberList();
-
-
-            if (strings.size()>=2){
-                KVChannel kvChannel = new KVChannel();
-                kvChannel.connectServer("127.0.0.1",10200);
-                kvChannel.connectServer("127.0.0.1",10201);
-                kvChannel.waitForConnection();
-                long start = System.currentTimeMillis();
-                for (long i=0;i<150000;i++){
-                    kvChannel.put(1l,"aaa","bbb");
-                    //kvChannel.put(1l,"aaa1","bbb");
-                }
-                System.out.println(System.currentTimeMillis() -start);
-
-            }
+            kvClient.put("aaa1","ccc");
+            System.out.println(kvClient.get("aaa1"));
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        System.out.println("end!!!!");
         /*
         try {
-            KVChannel kvChannel = new KVChannel();
-            long start = System.currentTimeMillis();
-            for (long i=0;i<3;i++){
-                kvChannel.put(i,"aaa","bbb");
-                kvChannel.put(i,"aaa1","bbb");
+            for (long i=0;i<150000;i++){
+                kvClient.put("aaa","bbb");
+                kvClient.put("aaa1","bbb");
             }
-            System.out.println(System.currentTimeMillis() -start);
-            //kvChannel.put(1,"aaa","bbb");
-            //kvChannel.put(2,"aaa1","bbb1");
-        } catch (Exception e) {
+        }catch (Exception e){
             e.printStackTrace();
         }
         */
+        System.out.println("finish uses " + (System.currentTimeMillis() -start));
     }
 }

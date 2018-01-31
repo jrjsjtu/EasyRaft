@@ -9,4 +9,7 @@
     <leaderPort>
         <port>30303</port>
     </leaderPort>
+    <persistencyPath>
+
+    </persistencyPath>
 </hosts>

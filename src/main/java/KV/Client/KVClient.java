@@ -15,6 +15,7 @@ public class KVClient {
     KVChannel kvChannel;
     AtomicInteger atomicInteger = new AtomicInteger(0);
     KVClient(){
+        /*
         raftClient = new RaftClient();
         raftClient.joinRaft();
         ArrayList<String> arrayList = raftClient.getCurrentSlot();
@@ -28,6 +29,7 @@ public class KVClient {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        */
     }
 
     public void put(String key,String value) throws Exception{

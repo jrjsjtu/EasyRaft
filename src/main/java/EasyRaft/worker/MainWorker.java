@@ -12,7 +12,8 @@ public class MainWorker{
         try {
             XMLReader xmlReader = new XMLReader("/home/jrj/Desktop/idea-IU-163.12024.16/java_learn/EasyRaft/src/main/java/EasyRaft/worker/config.xml");
             StateManager stateManager = new StateManager();
-            RaftKeeper.setLeaderPort(xmlReader.getLeaderPort());
+            //RaftKeeper.setLeaderPort(xmlReader.getLeaderPort());
+            RaftKeeper.setLeaderPort(50002);
             RaftKeeper.setStateManager(stateManager);
             RaftKeeper.initCheckThread();
         } catch (Exception e) {

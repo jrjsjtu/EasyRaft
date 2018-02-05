@@ -6,6 +6,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.IdleStateEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,10 +21,11 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
     RaftClient raftClient;
     RaftCallBack raftCallBack;
-
-    public RequestDecoder(RaftClient raftClient, RaftCallBack raftCallBack){
+    CtxProxy ctxProxy;
+    public RequestDecoder(RaftClient raftClient, RaftCallBack raftCallBack,CtxProxy ctxProxy){
         this.raftClient = raftClient;
         this.raftCallBack = raftCallBack;
+        this.ctxProxy = ctxProxy;
 
         header = Unpooled.buffer(4);
     }
@@ -186,7 +188,29 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
         int requestIdx = Integer.parseInt(tmp[0]);
         int epoch = Integer.parseInt(tmp[1]);
         SelectLeaderRequest raftRequest =(SelectLeaderRequest)RequestFactory.requestOnTheFly.get(requestIdx);
-        if (tmp[2].equals("null") || epoch<raftClient.getEpoch()){
+        if (tmp[2].equals("null")){
+            int targetEpoch = Math.max(raftClient.getEpoch()+1,epoch+1);
+            raftRequest.setEpoch(targetEpoch);
+            ByteBuf byteBuf = raftClient.getByteBuffer(raftRequest.toString());
+            ctx.writeAndFlush(byteBuf);
+            System.out.println("null leader. Start a new select");
+        }else if(raftRequest.getEpoch() == epoch && tmp[2].equals(raftClient.getLeaderInfo())){
+            //走到这里表示已经是leader了,把它给callBack线程处理.
+            //然后删掉该request
+            System.out.println("become leader");
+            RaftClient.setEpoch(epoch);
+            raftRequest.setSuccess();
+            raftClient.callBackTask.put(raftRequest);
+            RequestFactory.requestOnTheFly.remove(requestIdx);
+        }else{
+            System.out.println("not leader.End select");
+            RaftClient.setEpoch(epoch);
+            raftClient.callBackTask.put(raftRequest);
+            RequestFactory.requestOnTheFly.remove(requestIdx);
+        }
+
+        /*
+        if (tmp[2].equals("null") || epoch==raftClient.getEpoch()){
             //发现leader挂了,就再选一次.
             int targetEpoch = Math.max(raftClient.getEpoch()+1,epoch+1);
             raftRequest.setEpoch(targetEpoch);
@@ -194,12 +218,13 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
             ByteBuf byteBuf = raftClient.getByteBuffer(raftRequest.toString());
             ctx.writeAndFlush(byteBuf);
             System.out.println("null leader. Start a new select");
-        }else if(raftClient.getEpoch() == epoch && tmp[2].equals(raftClient.getSelfAddress())){
+        }else if(raftRequest.getEpoch() == epoch && tmp[2].equals(raftClient.getLeaderInfo())){
             //走到这里表示已经是leader了,把它给callBack线程处理.
             //然后删掉该request
+            RaftClient.setEpoch(epoch);
             raftClient.callBackTask.put(raftRequest);
             RequestFactory.requestOnTheFly.remove(requestIdx);
-        }else if(raftClient.getEpoch() == epoch && !tmp[2].equals(raftClient.getSelfAddress())){
+        }else if(raftClient.getEpoch() == epoch && !tmp[2].equals(raftClient.getLeaderInfo())){
             RequestFactory.requestOnTheFly.remove(requestIdx);
             raftRequest.notifyResponse();
             System.out.println("Not leader.End select");
@@ -212,6 +237,7 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
             raftRequest.notifyResponse();
             System.out.println("Not leader.End select");
         }
+        */
     }
 
     private void processSetSlot(byte[] bytes){
@@ -224,10 +250,32 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
 
     ChannelHandlerContext ctx;
+
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        String selfAddress = ctx.channel().localAddress().toString().substring(1);
-        raftClient.setSelfAddress(selfAddress);
+        raftClient.electLeader(0);
+        ctxProxy.addCtx(raftClient);
         this.ctx = ctx;
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        ctxProxy.removeCtx(raftClient);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        // IdleStateHandler 所产生的 IdleStateEvent 的处理逻辑.
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent e = (IdleStateEvent) evt;
+            switch (e.state()) {
+                case ALL_IDLE:
+                    SayHelloRequest sayHelloRequest = new SayHelloRequest(raftClient.getLeaderInfo());
+                    raftClient.sendRequest(sayHelloRequest,-1);
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 }

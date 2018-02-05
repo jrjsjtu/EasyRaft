@@ -5,6 +5,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.IdleStateEvent;
 
 
 /**
@@ -50,5 +51,20 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         RaftKeeper.processChannelInactive(ctx);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        // IdleStateHandler 所产生的 IdleStateEvent 的处理逻辑.
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent e = (IdleStateEvent) evt;
+            switch (e.state()) {
+                case ALL_IDLE:
+                    RaftKeeper.processChannelInactive(ctx);
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 }

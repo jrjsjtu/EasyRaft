@@ -100,11 +100,19 @@ public abstract class State implements RaftRpc{
         }
     }
 
+    private static CommitCallback commitCallback;
+    public static void setCommitCallback(CommitCallback commitCallback1){
+        commitCallback = commitCallback1;
+    }
+
+    public static void executeLogAtIndex(int idx){
+        commitCallback.executeAfterCommit(logs.get(idx).getLog());
+    }
+
     private static void insert0(String entry){
         long localIndex;
         localIndex = lastLog.getIndex();
         RaftLog newLog = new RaftLog(currentTerm,localIndex+1,entry);
-        System.out.println("insert entry into log " + entry );
         lastLog = newLog;
         logs.add(newLog);
     }

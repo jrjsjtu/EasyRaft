@@ -11,9 +11,11 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.EmptyStackException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,9 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by jrj on 17-12-29.
  */
 public class RaftClient implements RaftClientImp{
-    EventLoopGroup group;
-    Bootstrap b;
-
     public static final char SelectLeaderRequest = '1';
     public static final char SelectLeaderResponse = '5';
 
@@ -47,28 +46,29 @@ public class RaftClient implements RaftClientImp{
     public static final char LeaveClusterRequest = 'g';
     public static final char LeaveClusterResponse = 'h';
 
+    public static final char SayHelloRequest = 'i';
 
-    AtomicInteger requestOrder = new AtomicInteger(0);
+    static AtomicInteger requestOrder = new AtomicInteger(0);
+    static AtomicInteger memberOrder = new AtomicInteger(0);
+
+    private static int epoch = 0;
 
     private SocketChannel ch;
-    private int epoch = 0;
+    private String leaderInfo;
 
-    private String selfAddress;
-
-    public String getSelfAddress() {
-        return selfAddress;
+    public String getLeaderInfo() {
+        return leaderInfo;
     }
 
-    public void setSelfAddress(String selfAddress) {
-        this.selfAddress = selfAddress;
+    public void setLeaderInfo(String leaderInfo){
+        this.leaderInfo = leaderInfo;
     }
 
-    public int getEpoch() {
+    public static int getEpoch() {
         return epoch;
     }
-
-    public void setEpoch(int epoch) {
-        this.epoch = epoch;
+    public static void setEpoch(int epoch1) {
+        epoch = epoch1;
     }
 
     LinkedBlockingQueue<RaftRequest> callBackTask = new LinkedBlockingQueue<RaftRequest>();
@@ -79,7 +79,11 @@ public class RaftClient implements RaftClientImp{
                     RaftRequest tmp = callBackTask.take();
                     if (tmp instanceof SelectLeaderRequest){
                         SelectLeaderRequest selectLeaderRequest = (SelectLeaderRequest)tmp;
-                        raftCallBack.onBecomeLeader(localRaftClient);
+                        if(selectLeaderRequest.isSuccess()){
+                            raftCallBack.onBecomeLeader(localRaftClient);
+                        }else{
+                            raftCallBack.onSelectLeaderFailed(localRaftClient);
+                        }
                         selectLeaderRequest.notifyResponse();
                     }else if(tmp instanceof LeaderDownRequest){
                         LeaderDownRequest leaderDownRequest = (LeaderDownRequest)tmp;
@@ -99,7 +103,7 @@ public class RaftClient implements RaftClientImp{
                 e.printStackTrace();
             }
         }
-    },"RaftCallBack-Thread");
+    },"RaftCallBack-Thread-" + memberOrder.getAndIncrement());
 
     RaftCallBack raftCallBack;
     RaftClient localRaftClient;
@@ -123,6 +127,10 @@ public class RaftClient implements RaftClientImp{
 
         }
 
+        public void onSelectLeaderFailed(RaftClientImp raftClientImp) {
+
+        }
+
         public void onMemberJoinWhenLeader(int idx, String address) {
 
         }
@@ -131,23 +139,29 @@ public class RaftClient implements RaftClientImp{
 
         }
     }
-    public void joinRaft(){
-        group = new NioEventLoopGroup(1);
-        b = new Bootstrap();
-        b.group(group).channel(NioSocketChannel.class).
-                remoteAddress(new InetSocketAddress("127.0.0.1", 30303)).
+
+    EventLoopGroup theGroup;
+    String ipAddress;
+    int port;
+    CtxProxy ctxProx;
+    public void joinRaft() throws Exception{
+        joinRaft(theGroup,ipAddress,port,leaderInfo,ctxProx);
+    }
+    public void joinRaft(EventLoopGroup theGroup,String ipAddress, int port,String appendInfo, final CtxProxy ctxProxy) throws Exception{
+        setLeaderInfo(appendInfo);
+        this.theGroup = theGroup;this.ipAddress = ipAddress;this.port = port;this.ctxProx = ctxProxy;
+        Bootstrap b = new Bootstrap();
+        b.group(theGroup).channel(NioSocketChannel.class).
+                remoteAddress(new InetSocketAddress(ipAddress, port)).
                 handler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel ch) throws Exception {
                         localRaftClient.ch = ch;
-                        ch.pipeline().addLast(new RequestDecoder(localRaftClient,raftCallBack));
+                        ch.pipeline().addLast(new IdleStateHandler(0,0,1));
+                        ch.pipeline().addLast(new RequestDecoder(localRaftClient,raftCallBack,ctxProxy));
                     }
                 }).option(ChannelOption.TCP_NODELAY,true);
         callBackThread.start();
-        try {
-            ChannelFuture future = b.connect().sync();
-        }catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        b.connect().sync();
     }
 
     /**
@@ -161,18 +175,18 @@ public class RaftClient implements RaftClientImp{
 
     //这个版本专门给client调用,是要阻塞的.当返回的时候则onBecomeLeader已经执行完了.
     //当leader挂掉的时候,其实也会重选.但是如果在callBack线程里阻塞,那么就死锁了.所以目前leader挂掉的callBack只能不死锁.但不知到会不会带来什么问题?
-    public void electLeader() {
+    public void electLeader(String leaderInfo) {
         int requestIdx = requestOrder.getAndIncrement();
-        epoch += 1;
-        RaftRequest raftRequest = new SelectLeaderRequest(requestIdx,epoch,selfAddress,this);
+        RaftRequest raftRequest = new SelectLeaderRequest(requestIdx,epoch+1,leaderInfo);
         sendRequest(raftRequest,requestIdx);
         raftRequest.waitForResponse();
     }
 
+
     //这个版本专门给callBack线程调用,他不会阻塞,也不能阻塞
     public void electLeader(int epoch) {
         int requestIdx = requestOrder.getAndIncrement();
-        RaftRequest raftRequest = new SelectLeaderRequest(requestIdx,epoch,selfAddress,this);
+        RaftRequest raftRequest = new SelectLeaderRequest(requestIdx,epoch,leaderInfo);
         sendRequest(raftRequest,requestIdx);
     }
 
@@ -213,11 +227,15 @@ public class RaftClient implements RaftClientImp{
         return raftRequest.getResult();
     }
 
-    private void sendRequest(RaftRequest raftRequest,int requestIdx){
+    public void sendRequest(RaftRequest raftRequest,int requestIdx){
         while(ch==null){}
         ByteBuf byteBuf = getByteBuffer(raftRequest.toString());
-        System.out.println("now send request  +  " + raftRequest.toString());
-        RequestFactory.requestOnTheFly.put(requestIdx,raftRequest);
+        if(raftRequest.toString().charAt(0) != 'i'){
+            System.out.println("now send request  +  " + raftRequest.toString());
+        }
+        if(requestIdx>=0){
+            RequestFactory.requestOnTheFly.put(requestIdx,raftRequest);
+        }
         ch.writeAndFlush(byteBuf);
     }
 

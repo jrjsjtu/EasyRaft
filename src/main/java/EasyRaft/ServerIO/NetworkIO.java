@@ -9,6 +9,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 
 /**
  * Created by jrj on 17-12-28.
@@ -21,12 +22,13 @@ public class NetworkIO {
         b.group(bossGroup,workerGroup).channel(NioServerSocketChannel.class).option(ChannelOption.SO_BACKLOG,64).
                 childHandler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel ch) throws Exception {
+                        ch.pipeline().addLast(new IdleStateHandler(0, 0, 2));
                         ch.pipeline().addLast(new RequestDecoder());
                     }
                 });
 
         try {
-            b.bind(port).sync().channel().closeFuture().sync();
+            b.bind(port).sync();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

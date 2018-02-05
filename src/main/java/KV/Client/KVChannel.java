@@ -15,6 +15,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -26,62 +27,44 @@ public class KVChannel implements KVProtocol{
     private AtomicLong requestIndex;
     //这里的index是客户端分配的每一条消息的id,ack返回之后根据ack中的long找到线程然后唤醒
     //这边的String其实起到的就是lock的作用,然客户线程wait在lock上,然后在netty线程中用await唤醒
-    private static ChannelHandlerContext channelHandlerContext;
-    private static HashMap<Long,String> indexThreadMap;
     //这里的index是一致性hash之后的index
-    private static SocketChannel[] indexContextMap;
-    private static Semaphore[] semaphores;
-    private static int[] kvPorts = new int[]{10200,10201};
-    public static String lock;
-    static{
-        indexThreadMap = new HashMap<Long, String>();
-        indexContextMap = new SocketChannel[2];
-        semaphores = new Semaphore[2];
-        for (int i=0;i<2;i++){
-            semaphores[i] = new Semaphore(1);
-        }
-    }
+
+
+    private SocketChannel[] indexContextMap;
+    CountDownLatch countDownLatch;
     EventLoopGroup group;
-    KVChannel() throws Exception{
+    private Semaphore[] semaphores = new Semaphore[2];
+    public static String[] resultArray;
+    KVChannel(int clusterSize) throws Exception{
         group = new NioEventLoopGroup(1);
         requestIndex = new AtomicLong(0);
-        /*
-        Bootstrap b = new Bootstrap();
-        b.group(group).channel(NioSocketChannel.class).
-                remoteAddress(new InetSocketAddress("127.0.0.1", 30303)).
-                handler(new ChannelInitializer<SocketChannel>() {
-                    protected void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline().addLast(new RequestDecoder());
-                        ch.pipeline().addLast(new ResponseHandler());
-                    }
-                });
-        b.connect().sync();
-        */
+        countDownLatch = new CountDownLatch(clusterSize);
+        indexContextMap = new SocketChannel[clusterSize];
+        semaphores = new Semaphore[2];
+        for(int i=0;i<semaphores.length;i++){
+            semaphores[i] = new Semaphore(0);
+        }
+        resultArray = new String[clusterSize];
     }
 
-    private static ArrayList<String> metaInfoMap;
-    static {
-        metaInfoMap = new ArrayList<String>();
+    public void waitForConnection(){
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
-    //这里是要问leader要数据的,因为有发生脑裂的情况,唯一知道集群中server数量的只有leader了
-    public void getLeadrInfo(){
 
-    }
-
-    public void waitForConnection() throws Exception{
-        semaphore.acquire();
-    }
-    Semaphore semaphore = new Semaphore(-1);
-    public boolean connectServer(final String hostName, final int port){
+    public boolean connectServer(final String hostName, final int port, final int shard){
         Bootstrap b = new Bootstrap();
         b.group(group).channel(NioSocketChannel.class).
                 remoteAddress(new InetSocketAddress("127.0.0.1", port)).
                 handler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel ch) throws Exception {
-                        indexContextMap[port-10200] = ch;
-                        semaphore.release();
+                        indexContextMap[shard] = ch;
+                        countDownLatch.countDown();
                         ch.pipeline().addLast(new RequestDecoder());
-                        ch.pipeline().addLast(new ResponseHandler(hostName,port));
+                        ch.pipeline().addLast(new ResponseHandler(hostName,port,semaphores[shard],shard));
                     }
                 });
         try{
@@ -93,44 +76,36 @@ public class KVChannel implements KVProtocol{
         return true;
     }
 
-    public static void awaitClient(int index){
-        /*
-        String key;
-        synchronized (indexThreadMap){
-            key = indexThreadMap.get(index);
-            indexThreadMap.remove(index);
-        }
-        synchronized (key){
-            key.notify();
-        }
-        */
-        semaphores[index].release();
-        /*
-        synchronized (lock){
-            lock.notify();
-        }
-        */
+    private static char PutRequest = '1';
+    private static char GetRequest = '2';
+
+
+    public String get(String key) throws Exception{
+        int payLoadSize = key.length() + 4 +1 +4;
+
+        int idx = key.hashCode()%2;
+
+        ByteBuf byteBuf = Unpooled.buffer();
+        byteBuf.writeInt(payLoadSize).writeByte(GetRequest).writeInt(idx);
+        byteBuf.writeInt(key.length()).writeBytes(key.getBytes());
+        indexContextMap[idx].writeAndFlush(byteBuf);
+        semaphores[idx].acquire();
+        return resultArray[idx];
     }
-
-    public static void setChannelHandlerContext(ChannelHandlerContext ctx){
-        channelHandlerContext = ctx;
-    }
-
-
-    public void put(long requestIndex, String key, String value) throws Exception {
-        int payLoadSize = key.length() + value.length() + 8 + 4;
+    public void put(String key, String value) throws Exception {
+        int payLoadSize = key.length() + value.length() + 8 + 4 + 1;
         ByteBuf byteBuf = Unpooled.buffer(payLoadSize+4);
 
         int idx = key.hashCode()%2;
 
-        byteBuf.writeInt(payLoadSize).writeInt(idx);
+        byteBuf.writeInt(payLoadSize).writeByte(PutRequest).writeInt(idx);
         byteBuf.writeInt(key.length()).writeBytes(key.getBytes());
         byteBuf.writeInt(value.length()).writeBytes(value.getBytes());
 
         //防止一个服务器同时被两个占用
         //System.out.println("output   " + idx);
-        semaphores[idx].acquire();
         indexContextMap[idx].writeAndFlush(byteBuf);
+        semaphores[idx].acquire();
         /*
         synchronized (key){
             indexContextMap[idx].writeAndFlush(byteBuf);

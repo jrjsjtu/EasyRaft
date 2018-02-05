@@ -8,18 +8,24 @@ import EasyRaft.client.RaftClient;
 public class SelectLeaderRequest extends AbstractRequest {
     int epoch,requestId;
     String selfID;
-    RaftClient raftClient;
-
-    public SelectLeaderRequest(int requestId,int epoch, String selfID, RaftClient raftClient){
+    boolean success = false;
+    public SelectLeaderRequest(int requestId,int epoch, String selfID){
         super();
         this.requestId = requestId;
         this.epoch = epoch;
         this.selfID = selfID;
-        this.raftClient = raftClient;
     }
 
     public void setEpoch(int epoch){
         this.epoch = epoch;
+    }
+    public int getEpoch(){return epoch;}
+
+    public void setSuccess(){
+        success = true;
+    }
+    public boolean isSuccess(){
+        return success;
     }
     //总是type + request id
     @Override

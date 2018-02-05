@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hosts>
+    <host>
+        <ip>127.0.0.1:20001:30001</ip>
+        <ip>127.0.0.1:20002:30002</ip>
+        <ip>127.0.0.1:20003:30003</ip>
+    </host>
+    <replica>
+        1
+    </replica>
+    <leaderPort>
+        <port>30303</port>
+    </leaderPort>
+    <persistencyPath>
+        ~/KVServer
+    </persistencyPath>
+</hosts>

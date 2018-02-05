@@ -10,7 +10,7 @@ import java.util.ArrayList;
 public interface RaftCallBack {
     void onBecomeLeader(RaftClientImp raftClientImp);
     void onLeaderFailed(int epoch);
-
+    void onSelectLeaderFailed(RaftClientImp raftClientImp);
     void onMemberJoinWhenLeader(int idx,String address);
     void onMemberLeaveWhenLeader(String address);
 }

@@ -200,7 +200,6 @@ public class RaftKeeper {
     }
 
     private static void processSayHello(final ChannelHandlerContext ctx,final String request){
-        leaderWatcher.add(ctx);
         //只有是leader才发
         if(stateManager.isLeader()){
             if(request.equals(currentLeader.address)){
@@ -231,10 +230,10 @@ public class RaftKeeper {
 
     private static void processSelectLeader(final ChannelHandlerContext ctx,final String request){
         final String entryId = "LeaderSelect:" + request;
-        //这个runnable只有在成功commit后才会调用,重新将任务放到netty的进程中,防止race condition!
+        //这个runnable只有在成功commit后才会调用,重新将任务放到netty的进程中,防止race condition
+        //并且由于raft是单线程,netty也用了单线程.raft中顺序执行的任务,他的回调,放到netty中也是顺序执行的.
         Runnable callBack = new Runnable() {
             public void run() {
-                //老实说,像这样嵌套的回调真的挺难受的.
                 ctx.executor().submit(new Runnable() {
                     public void run() {
                         String[] info = request.split("\\|");
@@ -285,15 +284,17 @@ public class RaftKeeper {
         //这个runnable只有在成功commit后才会调用,重新将任务放到netty的进程中,防止race condition!
         Runnable callBack = new Runnable() {
             public void run() {
-                //老实说,像这样嵌套的回调真的挺难受的.
+                //将任务放回netty线程,避免race condition
                 ctx.executor().submit(new Runnable() {
                     public void run() {
                         String[] info = request.split("\\|");
-                        //ctxStrMap.put(ctx,info[1]);
+                        //成功了之后在各种数据结构中加入相应的信息,以维持状态
+                        //但是由于
                         aliveList.add(info[1]);
-                        System.out.println("now join cluster named"+info[1]);
                         strCtxMap.put(info[1],ctx);
                         ctxStrMap.put(ctx,info[1]);
+                        leaderWatcher.add(ctx);
+
                         if (currentLeader.ctx!= null){
                             //通知leader有人上线
                             ByteBuf byteBuf =getInfoWrapped(info[1], NotifyMemberUp);

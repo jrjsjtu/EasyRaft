@@ -253,7 +253,9 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        raftClient.electLeader(0);
+        if (raftClient.getHeartbeat()){
+            raftClient.electLeader(0);
+        }
         ctxProxy.addCtx(raftClient);
         this.ctx = ctx;
     }

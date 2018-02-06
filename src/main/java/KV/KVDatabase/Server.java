@@ -38,37 +38,31 @@ public class Server {
          }
      }
     public static void main(String[] args){
-        int serverPort = 30000;
-        int shard = 0;
+        ServerConfig serverConfig = null;
+        try {
+            serverConfig = new ServerConfig("//home/jrj/Desktop/idea-IU-163.12024.16/java_learn/EasyRaft/src/main/java/KV/KVDatabase/config.xml");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-        String appendInfo = serverPort + ":" + shard;
+        String appendInfo = serverConfig.getserverPort() + ":" + serverConfig.getshard();
         CtxProxy ctxProxy = new CtxProxy("127.0.0.1", appendInfo);
         ctxProxy.setCallBackClass(KVServerCallBack.class);
+        ArrayList<String> strings = serverConfig.getIpPortList();
 
-        try {
-            ctxProxy.tryToConnect("127.0.0.1",50000);
-        } catch (Exception e) {
-            System.out.println("127.0.0.1:50000 failed");
+        for(String tmp:strings){
+            String[] infos = tmp.split(":");
+            try {
+                ctxProxy.tryToConnect(infos[0],Integer.parseInt(infos[1]));
+            } catch (Exception e) {
+                System.out.println(infos + " connect failed");
+            }
         }
 
-        try {
-            ctxProxy.tryToConnect("127.0.0.1",50001);
-        } catch (Exception e) {
-            System.out.println("127.0.0.1:50001 failed");
-        }
-
-        try {
-            ctxProxy.tryToConnect("127.0.0.1",50002);
-        } catch (Exception e) {
-            System.out.println("127.0.0.1:50002 failed");
-        }
-        System.out.println("stuck");
-        //ctxProxy.electLeader();
-        //ctxProxy.joinCluster();
         Server kvServer;
 
         try{
-            kvServer = new Server(serverPort+shard);
+            kvServer = new Server(serverConfig.getserverPort());
         }catch (Exception e){
             System.out.println("?????");
             e.printStackTrace();

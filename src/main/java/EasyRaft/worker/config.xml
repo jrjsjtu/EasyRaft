@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<hosts>
-    <host>
-        <ip>192.168.1.22</ip>
-    </host>
-    <clusterSize>
-        5
-    </clusterSize>
-    <leaderPort>
-        <port>30303</port>
-    </leaderPort>
-    <persistencyPath>
-
-    </persistencyPath>
-</hosts>
+<host>
+    <ip>127.0.0.1:50000</ip>
+</host>

@@ -1,5 +1,6 @@
 package KV.Client;
 
+import EasyRaft.client.CtxProxy;
 import EasyRaft.client.RaftClient;
 import EasyRaft.client.callBack.RaftCallBack;
 
@@ -11,10 +12,32 @@ import java.util.concurrent.atomic.AtomicLong;
  * Created by jrj on 17-12-24.
  */
 public class KVClient {
-    RaftClient raftClient;
+    CtxProxy ctxProxy;
     KVChannel kvChannel;
-    AtomicInteger atomicInteger = new AtomicInteger(0);
-    KVClient(){
+    KVClient(ClientConfig clientConfig){
+        try {
+            ctxProxy = new CtxProxy();
+            ArrayList<String> raftCluster = clientConfig.getIpPortList();
+            for(String tmp:raftCluster){
+                String[] info = tmp.split(":");
+                ctxProxy.connectWithoutHeartbeat(info[0],Integer.parseInt(info[1]));
+            }
+            ArrayList<String> arrayList = ctxProxy.querySlot();
+
+            try {
+                kvChannel = new KVChannel(2);
+                for(String tmp:arrayList){
+                    String[] info = tmp.split(":");
+                    kvChannel.connectServer(info[0],Integer.parseInt(info[1]),Integer.parseInt(info[2]));
+                }
+                kvChannel.waitForConnection();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         /*
         raftClient = new RaftClient();
         raftClient.joinRaft();
@@ -40,25 +63,22 @@ public class KVClient {
         return kvChannel.get(key);
     }
     public static void main(String[] args){
-        KVClient kvClient = new KVClient();
-        long start = System.currentTimeMillis();
+        ClientConfig clientConfig = null;
+        try {
+            clientConfig = new ClientConfig("/home/jrj/Desktop/idea-IU-163.12024.16/java_learn/EasyRaft/src/main/java/KV/Client/config.xml");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
+        KVClient kvClient = new KVClient(clientConfig);
+        long start = System.currentTimeMillis();
         try {
             kvClient.put("aaa1","ccc");
             System.out.println(kvClient.get("aaa1"));
         } catch (Exception e) {
             e.printStackTrace();
         }
-        /*
-        try {
-            for (long i=0;i<150000;i++){
-                kvClient.put("aaa","bbb");
-                kvClient.put("aaa1","bbb");
-            }
-        }catch (Exception e){
-            e.printStackTrace();
-        }
-        */
+
         System.out.println("finish uses " + (System.currentTimeMillis() -start));
     }
 }

@@ -201,8 +201,6 @@ public class RaftKeeper {
 
     private static void processSayHello(final ChannelHandlerContext ctx,final String request){
         leaderWatcher.add(ctx);
-        strCtxMap.put(request,ctx);
-        ctxStrMap.put(ctx,request);
         //只有是leader才发
         if(stateManager.isLeader()){
             if(request.equals(currentLeader.address)){
@@ -213,11 +211,19 @@ public class RaftKeeper {
                 ctx.writeAndFlush(byteBuf);
                 return;
             }
-            for(String tmp:aliveList){
-                ChannelHandlerContext tmpCTX = strCtxMap.get(tmp);
-                if(!leaderWatcher.contains(tmpCTX)){
-                    ByteBuf byteBuf = getInfoWrapped(tmp,NotifyMemberDown);
-                    currentLeader.ctx.writeAndFlush(byteBuf);
+            if(currentLeader.ctx == ctx){
+                for(String tmp:aliveList){
+                    ChannelHandlerContext tmpCTX = strCtxMap.get(tmp);
+                    //这里可能因为aliveList中加入了ctx,而ctxStrMap,strCtxMap没有来得及加入ctx导致错误的memberDown
+                    if(!leaderWatcher.contains(tmpCTX)){
+                        if(tmpCTX == null){
+                            System.out.println("null tmpCtx");
+                        }
+                        System.out.println("tmp is " + tmp);
+                        System.out.println("request is " + request);
+                        ByteBuf byteBuf = getInfoWrapped(tmp,NotifyMemberDown);
+                        currentLeader.ctx.writeAndFlush(byteBuf);
+                    }
                 }
             }
         }
@@ -285,6 +291,9 @@ public class RaftKeeper {
                         String[] info = request.split("\\|");
                         //ctxStrMap.put(ctx,info[1]);
                         aliveList.add(info[1]);
+                        System.out.println("now join cluster named"+info[1]);
+                        strCtxMap.put(info[1],ctx);
+                        ctxStrMap.put(ctx,info[1]);
                         if (currentLeader.ctx!= null){
                             //通知leader有人上线
                             ByteBuf byteBuf =getInfoWrapped(info[1], NotifyMemberUp);

@@ -144,19 +144,26 @@ public class RaftClient implements RaftClientImp{
     String ipAddress;
     int port;
     CtxProxy ctxProx;
-    public void joinRaft() throws Exception{
-        joinRaft(theGroup,ipAddress,port,leaderInfo,ctxProx);
+    boolean needHeartbeat;
+
+    public boolean getHeartbeat(){
+        return needHeartbeat;
     }
-    public void joinRaft(EventLoopGroup theGroup,String ipAddress, int port,String appendInfo, final CtxProxy ctxProxy) throws Exception{
+    public void joinRaft() throws Exception{
+        joinRaft(theGroup,ipAddress,port,leaderInfo,ctxProx,needHeartbeat);
+    }
+    public void joinRaft(EventLoopGroup theGroup,String ipAddress, int port,String appendInfo, final CtxProxy ctxProxy,final boolean needHeartbeat) throws Exception{
         setLeaderInfo(appendInfo);
-        this.theGroup = theGroup;this.ipAddress = ipAddress;this.port = port;this.ctxProx = ctxProxy;
+        this.theGroup = theGroup;this.ipAddress = ipAddress;this.port = port;this.ctxProx = ctxProxy;this.needHeartbeat = needHeartbeat;
         Bootstrap b = new Bootstrap();
         b.group(theGroup).channel(NioSocketChannel.class).
                 remoteAddress(new InetSocketAddress(ipAddress, port)).
                 handler(new ChannelInitializer<SocketChannel>() {
                     protected void initChannel(SocketChannel ch) throws Exception {
                         localRaftClient.ch = ch;
-                        ch.pipeline().addLast(new IdleStateHandler(0,0,1));
+                        if(needHeartbeat){
+                            ch.pipeline().addLast(new IdleStateHandler(0,0,1));
+                        }
                         ch.pipeline().addLast(new RequestDecoder(localRaftClient,raftCallBack,ctxProxy));
                     }
                 }).option(ChannelOption.TCP_NODELAY,true);

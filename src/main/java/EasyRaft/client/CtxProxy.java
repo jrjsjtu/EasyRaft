@@ -2,6 +2,7 @@ package EasyRaft.client;
 
 import EasyRaft.client.callBack.RaftCallBack;
 import EasyRaft.requests.JoinClusterRequest;
+import EasyRaft.requests.QuerySlotRequest;
 import EasyRaft.requests.RaftRequest;
 import EasyRaft.requests.SelectLeaderRequest;
 import io.netty.bootstrap.Bootstrap;
@@ -40,6 +41,10 @@ public class CtxProxy{
 
     }
 
+    public CtxProxy(){
+        group = new NioEventLoopGroup(1);
+    }
+
     public void addCtx(RaftClient ctx){
         synchronized (successClient){
             successClient.add(ctx);
@@ -64,21 +69,30 @@ public class CtxProxy{
         final RaftCallBack raftCallBack = callBackClass.newInstance();
         final RaftClient raftClient = new RaftClient(raftCallBack);
         raftClients.add(raftClient);
-        raftClient.joinRaft(group,ipAddress,port,appendInfo,this);
+        raftClient.joinRaft(group,ipAddress,port,appendInfo,this,true);
         //raftClient.electLeader(stringBuilder.toString());
         //raftClient.joinCLuster(stringBuilder.toString());
     }
 
-    public void electLeader(){
-        int epoch = RaftClient.getEpoch()+1;
+    public void connectWithoutHeartbeat(String ipAddress,int port) throws Exception{
+        final RaftClient raftClient = new RaftClient();
+        raftClients.add(raftClient);
+        raftClient.joinRaft(group,ipAddress,port,appendInfo,this,false);
+        //raftClient.electLeader(stringBuilder.toString());
+        //raftClient.joinCLuster(stringBuilder.toString());
+    }
+
+
+    public ArrayList<String> querySlot(){
         int requestIdx = RaftClient.requestOrder.getAndIncrement();
-        SelectLeaderRequest selectLeaderRequest = new SelectLeaderRequest(requestIdx,epoch,appendInfo);
+        QuerySlotRequest querySlotRequest = new QuerySlotRequest(requestIdx);
         synchronized (successClient){
             for(RaftClient raftClient:successClient){
-                raftClient.sendRequest(selectLeaderRequest,requestIdx);
+                raftClient.sendRequest(querySlotRequest,requestIdx);
             }
         }
-        selectLeaderRequest.waitForResponse();
+        querySlotRequest.waitForResponse();
+        return querySlotRequest.getResult();
     }
 
     public void joinCluster(){

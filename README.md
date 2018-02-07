@@ -86,3 +86,7 @@ void setSlot(int index, String infomation)
    ```
 
 3. 使用方式
+须在Ubuntu下运行.
+下载工程后,来到FastTest文件夹下,运行start.sh脚本会依次启动cluster size为2的Raft Server以及shard为2的KV Server.
+之后根据命令行的提示便可以作为KV的Client进行读或者写数据库.
+使用完毕后,按下CTRL+C可以突出程序,同时脚本会自动kill掉刚才启动的Raft Sever以及KV Server.

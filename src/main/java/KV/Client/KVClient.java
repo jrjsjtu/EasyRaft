@@ -4,7 +4,11 @@ import EasyRaft.client.CtxProxy;
 import EasyRaft.client.RaftClient;
 import EasyRaft.client.callBack.RaftCallBack;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import Utils.RaftLogger;
@@ -76,14 +80,26 @@ public class KVClient {
         }
 
         KVClient kvClient = new KVClient(clientConfig);
-        long start = System.currentTimeMillis();
-        try {
-            kvClient.put("aaa1","ccc");
-            System.out.println(kvClient.get("aaa1"));
-        } catch (Exception e) {
-            e.printStackTrace();
+        BufferedReader bf=new BufferedReader(new InputStreamReader(System.in));
+        while(true){
+            try {
+                System.out.println("输入1代表写入KV,输入2代表查询KV");
+                String s = bf.readLine();
+                if(s.equals("1")){
+                    System.out.println("请输入Key");
+                    String key = bf.readLine();
+                    System.out.println("请输入Value");
+                    String value = bf.readLine();
+                    kvClient.put(key,value);
+                }else if(s.equals("2")){
+                    System.out.println("请输入Key");
+                    String key = bf.readLine();
+                    System.out.println("key 为 " + key + "的 value 为");
+                    System.out.println(kvClient.get(key));
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-
-        System.out.println("finish uses " + (System.currentTimeMillis() -start));
     }
 }

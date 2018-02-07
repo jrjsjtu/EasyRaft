@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hosts>
+    <host>
+        <ip>127.0.0.1:50000</ip>
+        <ip>127.0.0.1:50001</ip>
+        <ip>127.0.0.1:50002</ip>
+    </host>
+    <KVServerPort>30001</KVServerPort>
+    <KVSharding>1</KVSharding>
+</hosts>

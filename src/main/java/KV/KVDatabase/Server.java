@@ -40,9 +40,10 @@ public class Server {
     public static void main(String[] args){
         ServerConfig serverConfig = null;
         try {
-            serverConfig = new ServerConfig("//home/jrj/Desktop/idea-IU-163.12024.16/java_learn/EasyRaft/src/main/java/KV/KVDatabase/config.xml");
+            serverConfig = new ServerConfig(args[0]);
         } catch (Exception e) {
             e.printStackTrace();
+            System.exit(0);
         }
 
         String appendInfo = serverConfig.getserverPort() + ":" + serverConfig.getshard();

@@ -1,6 +1,6 @@
 package KV.KVDatabase;
 
-import KV.Client.ClientConfig;
+import Utils.BaseConfig;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
@@ -12,12 +12,13 @@ import java.util.Iterator;
 /**
  * Created by jrj on 18-2-6.
  */
-public class ServerConfig {
+public class ServerConfig extends BaseConfig {
     ArrayList<String> ipPortList = new ArrayList<String>();
     int serverPort,shard;
     ServerConfig(String filePath) throws Exception{
+        String absolutePath = getAbsolutePath(filePath);
         SAXReader reader = new SAXReader();
-        Document document = reader.read(new File(filePath));
+        Document document = reader.read(new File(absolutePath));
         Element root = document.getRootElement();
         initMap(root);
     }

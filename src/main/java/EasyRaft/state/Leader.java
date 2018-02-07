@@ -3,6 +3,7 @@ package EasyRaft.state;
 import EasyRaft.AppendRpcResult;
 import EasyRaft.RaftDelayedTask;
 import EasyRaft.StateManager;
+import Utils.RaftLogger;
 import org.jgroups.Address;
 import org.jgroups.blocks.MethodCall;
 import org.jgroups.blocks.RequestOptions;
@@ -106,7 +107,7 @@ public class Leader extends State {
             RaftLog raftLog = logs.get((int)i);
             //将commit成功返回给client
             raftLog.sendResponse();
-            System.out.println("new log " + raftLog.getLog());
+            RaftLogger.log.info("leader new log " + raftLog.getLog());
         }
         if (remoteIndex>lastApplied){
             lastApplied = remoteIndex;
@@ -128,7 +129,7 @@ public class Leader extends State {
                 RaftLog raftLog = logs.get((int)tmpIndex);
                 //将commit成功返回给client
                 raftLog.sendResponse();
-                System.out.println("new log " + raftLog.getLog());
+                RaftLogger.log.info("leader new log " + raftLog.getLog());
                 lastApplied = tmpIndex;
             }else{
                 return;

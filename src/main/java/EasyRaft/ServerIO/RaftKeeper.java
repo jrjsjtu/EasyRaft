@@ -4,6 +4,7 @@ import EasyRaft.StateManager;
 import EasyRaft.requests.MemberUpRequest;
 import EasyRaft.state.CommitCallback;
 import EasyRaft.state.State;
+import Utils.RaftLogger;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -163,7 +164,7 @@ public class RaftKeeper {
     private static HashSet<String> aliveList = new HashSet<String>();
     private static class RaftKeeperCommit implements CommitCallback{
         public void executeAfterCommit(String log) {
-            System.out.println(log);
+            RaftLogger.log.info("follower new log"+log);
             int position = log.indexOf(':');
             if(position<0){
                 return;

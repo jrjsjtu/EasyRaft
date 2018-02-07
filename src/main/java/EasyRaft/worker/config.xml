@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <host>
     <ip>127.0.0.1:50000</ip>
+    <clusterSize>3</clusterSize>
 </host>

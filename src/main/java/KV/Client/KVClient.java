@@ -7,7 +7,7 @@ import EasyRaft.client.callBack.RaftCallBack;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-
+import Utils.RaftLogger;
 /**
  * Created by jrj on 17-12-24.
  */
@@ -20,7 +20,11 @@ public class KVClient {
             ArrayList<String> raftCluster = clientConfig.getIpPortList();
             for(String tmp:raftCluster){
                 String[] info = tmp.split(":");
-                ctxProxy.connectWithoutHeartbeat(info[0],Integer.parseInt(info[1]));
+                try{
+                    ctxProxy.connectWithoutHeartbeat(info[0],Integer.parseInt(info[1]));
+                }catch (Exception e){
+                    RaftLogger.log.info(e.getMessage());
+                }
             }
             ArrayList<String> arrayList = ctxProxy.querySlot();
 
@@ -65,9 +69,10 @@ public class KVClient {
     public static void main(String[] args){
         ClientConfig clientConfig = null;
         try {
-            clientConfig = new ClientConfig("/home/jrj/Desktop/idea-IU-163.12024.16/java_learn/EasyRaft/src/main/java/KV/Client/config.xml");
+            clientConfig = new ClientConfig(args[0]);
         } catch (Exception e) {
             e.printStackTrace();
+            System.exit(0);
         }
 
         KVClient kvClient = new KVClient(clientConfig);

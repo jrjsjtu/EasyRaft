@@ -4,6 +4,7 @@ import EasyRaft.client.callBack.RaftCallBack;
 import EasyRaft.client.callBack.RaftClientImp;
 import EasyRaft.requests.*;
 import KV.KVDatabase.KVServerCallBack;
+import Utils.RaftLogger;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -238,7 +239,7 @@ public class RaftClient implements RaftClientImp{
         while(ch==null){}
         ByteBuf byteBuf = getByteBuffer(raftRequest.toString());
         if(raftRequest.toString().charAt(0) != 'i'){
-            System.out.println("now send request  +  " + raftRequest.toString());
+            RaftLogger.log.info("send request  +  " + raftRequest.toString());
         }
         if(requestIdx>=0){
             RequestFactory.requestOnTheFly.put(requestIdx,raftRequest);

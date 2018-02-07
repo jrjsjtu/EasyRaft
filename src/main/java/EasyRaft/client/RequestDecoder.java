@@ -2,6 +2,7 @@ package EasyRaft.client;
 
 import EasyRaft.client.callBack.RaftCallBack;
 import EasyRaft.requests.*;
+import Utils.RaftLogger;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -75,7 +76,7 @@ public class RequestDecoder extends ChannelInboundHandlerAdapter {
         char c = (char) payLoad.readByte();
         byte[] bytes = new byte[payLoad.readableBytes()];
         payLoad.readBytes(bytes);
-        System.out.println("receive response + " +c + " "+ new String(bytes));
+        RaftLogger.log.info("receive response + " +c + " "+ new String(bytes));
         //RegisterMember以及RegisterWatcher的返回结果总是相同的
         switch (c){
             case RaftClient.SelectLeaderResponse:

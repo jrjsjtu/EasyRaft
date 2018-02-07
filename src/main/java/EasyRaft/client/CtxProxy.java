@@ -85,14 +85,14 @@ public class CtxProxy{
 
     public ArrayList<String> querySlot(){
         int requestIdx = RaftClient.requestOrder.getAndIncrement();
-        QuerySlotRequest querySlotRequest = new QuerySlotRequest(requestIdx);
+        QuerySlotRequest selectLeaderRequest = new QuerySlotRequest(requestIdx);
         synchronized (successClient){
             for(RaftClient raftClient:successClient){
-                raftClient.sendRequest(querySlotRequest,requestIdx);
+                raftClient.sendRequest(selectLeaderRequest,requestIdx);
             }
         }
-        querySlotRequest.waitForResponse();
-        return querySlotRequest.getResult();
+        selectLeaderRequest.waitForResponse();
+        return selectLeaderRequest.getResult();
     }
 
     public void joinCluster(){

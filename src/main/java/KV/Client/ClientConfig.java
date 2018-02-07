@@ -8,15 +8,16 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-
+import Utils.BaseConfig;
 /**
  * Created by jrj on 18-2-6.
  */
-public class ClientConfig {
+public class ClientConfig extends BaseConfig {
     ArrayList<String> ipPortList = new ArrayList<String>();
     ClientConfig(String filePath) throws Exception{
+        String absolutePath = getAbsolutePath(filePath);
         SAXReader reader = new SAXReader();
-        Document document = reader.read(new File(filePath));
+        Document document = reader.read(new File(absolutePath));
         Element root = document.getRootElement();
         initMap(root);
     }
